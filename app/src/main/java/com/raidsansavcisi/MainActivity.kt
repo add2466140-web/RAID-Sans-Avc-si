@@ -1,340 +1,220 @@
-
 package com.raidsansavcisi
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.input.KeyboardType
+import android.content.Context
 
-private val Black = Color(0xFF101010)
-private val Panel = Color(0xFF201D18)
-private val Gold = Color(0xFFD6AE55)
-private val Cream = Color(0xFFF4E8CC)
-private val Muted = Color(0xFFB8AD98)
-private val MythicPink = Color(0xFFE879C5)
-
-private data class Champion(
-    val name: String,
-    val rarity: String,
-    val faction: String
-)
-
-private val champions = listOf(
-    Champion("Bad-el-Kazar", "Efsanevi", "Karanlık Elfler"),
-    Champion("Arbiter", "Efsanevi", "Yüce Elfler"),
-    Champion("Ninja", "Efsanevi", "Shadowkin"),
-    Champion("Searsha", "Efsanevi", "Bilinmiyor"),
-    Champion("Mikage", "Mitik", "Shadowkin"),
-    Champion("Siegfrund", "Mitik", "Yüce Elfler"),
-    Champion("Frolni", "Mitik", "Cüceler")
-)
+data class Champion(val name: String, val rarity: String, val faction: String)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { RaidApp() }
-    }
-}
 
-@Composable
-fun RaidApp() {
-    val prefs = androidx.compose.ui.platform.LocalContext.current
-        .getSharedPreferences("raid_tracker", 0)
+        val prefs = getSharedPreferences("raid_data", Context.MODE_PRIVATE)
 
-    var tab by remember { mutableIntStateOf(0) }
-    var target by remember { mutableStateOf(prefs.getString("target", "") ?: "") }
-    var shards by remember { mutableStateOf(prefs.getInt("shards", 0).toString()) }
-    var baseRate by remember { mutableStateOf(prefs.getString("base", "0.5") ?: "0.5") }
-    var mercyStart by remember { mutableStateOf(prefs.getString("start", "200") ?: "200") }
-    var increase by remember { mutableStateOf(prefs.getString("increase", "0.025") ?: "0.025") }
-    var ancient by remember { mutableStateOf(prefs.getInt("ancient", 0).toString()) }
-    var voids by remember { mutableStateOf(prefs.getInt("voids", 0).toString()) }
-    var sacred by remember { mutableStateOf(prefs.getInt("sacred", 0).toString()) }
-    var primal by remember { mutableStateOf(prefs.getInt("primal", 0).toString()) }
+        setContent {
+            MaterialTheme {
+                var tab by remember { mutableIntStateOf(0) }
 
-    var search by remember { mutableStateOf("") }
-    var rarity by remember { mutableStateOf("Tümü") }
+                var ancient by remember { mutableIntStateOf(prefs.getInt("ancient", 0)) }
+                var voidShard by remember { mutableIntStateOf(prefs.getInt("void", 0)) }
+                var sacred by remember { mutableIntStateOf(prefs.getInt("sacred", 0)) }
+                var primal by remember { mutableIntStateOf(prefs.getInt("primal", 0)) }
+                var mercy by remember { mutableIntStateOf(prefs.getInt("mercy", 0)) }
+                var probability by remember { mutableStateOf("1") }
 
-    val count = shards.toIntOrNull()?.coerceAtLeast(0) ?: 0
-    val base = baseRate.replace(',', '.').toDoubleOrNull()
-        ?.coerceIn(0.0, 100.0) ?: 0.5
-    val start = mercyStart.toIntOrNull()?.coerceAtLeast(0) ?: 200
-    val step = increase.replace(',', '.').toDoubleOrNull()
-        ?.coerceAtLeast(0.0) ?: 0.025
-    val next = (base + (count + 1 - start).coerceAtLeast(0) * step)
-        .coerceIn(0.0, 100.0)
+                fun save(key: String, value: Int) {
+                    prefs.edit().putInt(key, value).apply()
+                }
 
-    MaterialTheme(
-        colorScheme = darkColorScheme(
-            primary = Gold,
-            onPrimary = Black,
-            background = Black,
-            surface = Panel,
-            onSurface = Cream,
-            onBackground = Cream,
-            secondary = Gold
-        )
-    ) {
-        Column(Modifier.fillMaxSize().background(Black)) {
-            Column(
-                Modifier.fillMaxWidth().background(Panel).padding(18.dp)
-            ) {
-                Text(
-                    "RAID",
-                    color = Gold,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 4.sp
+                val champions = listOf(
+                    Champion("Bad-el-Kazar", "Efsanevi", "Ölümsüzler"),
+                    Champion("Arbiter", "Efsanevi", "Yüce Elfler"),
+                    Champion("Ninja", "Efsanevi", "Shadowkin"),
+                    Champion("Searsha", "Efsanevi", "Bilinmiyor"),
+                    Champion("Rotos", "Efsanevi", "Undead Hordes"),
+                    Champion("Krisk", "Efsanevi", "Lizardmen"),
+                    Champion("Mithrala", "Efsanevi", "Dark Elves"),
+                    Champion("Trunda", "Efsanevi", "Dwarves"),
+                    Champion("Gnut", "Efsanevi", "Dwarves"),
+                    Champion("Duchess Lilitu", "Efsanevi", "Demonspawn"),
+                    Champion("Prince Kymar", "Efsanevi", "Demonspawn"),
+                    Champion("Siphi", "Efsanevi", "Undead Hordes"),
+                    Champion("Nekhret", "Efsanevi", "Undead Hordes"),
+                    Champion("Turvold", "Efsanevi", "Barbarians"),
+                    Champion("Mikage", "Mitik", "Shadowkin"),
+                    Champion("Siegfrund", "Mitik", "Banner Lords"),
+                    Champion("Frolni", "Mitik", "Dwarves")
                 )
-                Text(
-                    "ŞANS AVCISI",
-                    color = Cream,
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.Black
-                )
-                Text(
-                    "Çağırmalarını planla • Şampiyonlarını keşfet",
-                    color = Muted,
-                    fontSize = 12.sp
-                )
-            }
 
-            NavigationBar(containerColor = Panel) {
-                listOf("Özet", "Mercy", "Kaynaklar", "Şampiyonlar")
-                    .forEachIndexed { i, label ->
-                        NavigationBarItem(
-                            selected = tab == i,
-                            onClick = { tab = i },
-                            icon = { Text(listOf("◆", "✦", "▣", "♛")[i]) },
-                            label = { Text(label, fontSize = 10.sp) },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = Black,
-                                indicatorColor = Gold,
-                                selectedTextColor = Gold,
-                                unselectedTextColor = Muted
-                            )
-                        )
-                    }
-            }
+                var filter by remember { mutableStateOf("Tümü") }
+                var search by remember { mutableStateOf("") }
 
-            Column(
-                Modifier.weight(1f).padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                when (tab) {
-                    0 -> {
-                        PanelCard("HEDEF ŞAMPİYON") {
-                            OutlinedTextField(
-                                value = target,
-                                onValueChange = {
-                                    target = it
-                                    prefs.edit().putString("target", it).apply()
-                                },
-                                label = { Text("Örn. Bad-el-Kazar") },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true
-                            )
+                Scaffold(
+                    topBar = {
+                        Column {
                             Text(
-                                "Hedef şampiyonunu burada takip et.",
-                                color = Muted
+                                "RAID ŞANS AVCISI",
+                                style = MaterialTheme.typography.headlineSmall,
+                                modifier = Modifier.padding(16.dp)
                             )
-                        }
-
-                        PanelCard("ÇAĞIRMA SAYACI") {
-                            NumberInput(shards, {
-                                shards = it
-                                prefs.edit().putInt(
-                                    "shards", it.toIntOrNull() ?: 0
-                                ).apply()
-                            }, "Efsanevi çıkmadan açılan parça")
-
-                            Text(
-                                "Kayıtlı sayaç: $count",
-                                color = Gold,
-                                fontWeight = FontWeight.Bold
-                            )
-
-                            Button(
-                                onClick = {
-                                    shards = "0"
-                                    prefs.edit().putInt("shards", 0).apply()
-                                },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Gold,
-                                    contentColor = Black
-                                )
-                            ) {
-                                Text("Sayacı sıfırla")
+                            TabRow(selectedTabIndex = tab) {
+                                listOf("Özet", "Mercy", "Kaynaklar", "Şampiyonlar")
+                                    .forEachIndexed { index, title ->
+                                        Tab(
+                                            selected = tab == index,
+                                            onClick = { tab = index },
+                                            text = { Text(title) }
+                                        )
+                                    }
                             }
                         }
-
-                        PanelCard("BİLGİ") {
-                            Text(
-                                "Uygulama oyun içi şansı değiştirmez. " +
-                                    "Sadece girdiğin oranlarla teorik hesap yapar.",
-                                color = Muted
-                            )
-                        }
                     }
+                ) { padding ->
+                    Column(
+                        modifier = Modifier
+                            .padding(padding)
+                            .fillMaxSize()
+                            .padding(16.dp)
+                    ) {
+                        when (tab) {
+                            0 -> {
+                                Text("Hoş geldin!")
+                                Spacer(Modifier.height(12.dp))
+                                Text("Antik: $ancient")
+                                Text("Hiçlik: $voidShard")
+                                Text("Kutsal: $sacred")
+                                Text("İlkel: $primal")
+                                Spacer(Modifier.height(12.dp))
+                                Text("Mercy sayacı: $mercy")
+                                Text("Şampiyon koleksiyonunu ve kaynaklarını takip et.")
+                            }
 
-                    1 -> {
-                        PanelCard("MERCY / OLASILIK HESABI") {
-                            Text(
-                                "Parça türü ve etkinlik oranına göre değerleri kendin gir.",
-                                color = Muted
-                            )
-
-                            NumberInput(baseRate, {
-                                baseRate = it
-                                prefs.edit().putString("base", it).apply()
-                            }, "Başlangıç oranı (%)")
-
-                            NumberInput(mercyStart, {
-                                mercyStart = it
-                                prefs.edit().putString("start", it).apply()
-                            }, "Mercy başlangıç sayısı")
-
-                            NumberInput(increase, {
-                                increase = it
-                                prefs.edit().putString("increase", it).apply()
-                            }, "Her sonraki parçada artış (yüzde puan)")
-
-                            NumberInput(shards, {
-                                shards = it
-                                prefs.edit().putInt(
-                                    "shards", it.toIntOrNull() ?: 0
-                                ).apply()
-                            }, "Mercy sayacındaki parça")
-
-                            Text(
-                                "Sıradaki çağırma için ayarlanmış oran",
-                                color = Muted
-                            )
-                            Text(
-                                String.format("%.3f%%", next),
-                                color = Gold,
-                                fontSize = 30.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                "Bu sonuç yalnızca girdiğin parametrelere dayanır. " +
-                                    "Güncel Mercy kuralını resmî oyun açıklamasından doğrula.",
-                                color = Muted
-                            )
-                        }
-                    }
-
-                    2 -> {
-                        PanelCard("PARÇA ENVANTERİ") {
-                            NumberInput(ancient, {
-                                ancient = it
-                                prefs.edit().putInt(
-                                    "ancient", it.toIntOrNull() ?: 0
-                                ).apply()
-                            }, "Antik parça")
-
-                            NumberInput(voids, {
-                                voids = it
-                                prefs.edit().putInt(
-                                    "voids", it.toIntOrNull() ?: 0
-                                ).apply()
-                            }, "Hiçlik parçası")
-
-                            NumberInput(sacred, {
-                                sacred = it
-                                prefs.edit().putInt(
-                                    "sacred", it.toIntOrNull() ?: 0
-                                ).apply()
-                            }, "Kutsal parça")
-
-                            NumberInput(primal, {
-                                primal = it
-                                prefs.edit().putInt(
-                                    "primal", it.toIntOrNull() ?: 0
-                                ).apply()
-                            }, "Primal parça")
-
-                            Text("Kayıtlar bu telefonda saklanır.", color = Muted)
-                        }
-
-                        PanelCard("ETKİNLİK REHBERİ") {
-                            Text(
-                                "2x: İlgili nadirlikte şampiyon çıkma oranını artırır.",
-                                color = Cream
-                            )
-                            Text(
-                                "10x / Progressive Chance: Hedef şampiyonun seçilme ihtimalini etkiler.",
-                                color = Cream
-                            )
-                            Text(
-                                "Garanti etkinliklerinde gereken parça sayısını oyun içi duyurudan kontrol et.",
-                                color = Muted
-                            )
-                        }
-                    }
-
-                    3 -> {
-                        Text(
-                            "ŞAMPİYON KOLEKSİYONU",
-                            color = Gold,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        OutlinedTextField(
-                            value = search,
-                            onValueChange = { search = it },
-                            label = { Text("Şampiyon ara") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            listOf("Tümü", "Efsanevi", "Mitik").forEach { option ->
-                                FilterChip(
-                                    selected = rarity == option,
-                                    onClick = { rarity = option },
-                                    label = { Text(option, fontSize = 11.sp) },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = Gold,
-                                        selectedLabelColor = Black
+                            1 -> {
+                                Text("MERCY TAKİBİ", style = MaterialTheme.typography.titleLarge)
+                                Spacer(Modifier.height(12.dp))
+                                Text("Mercy sayacı: $mercy")
+                                Row {
+                                    Button(onClick = {
+                                        mercy++
+                                        save("mercy", mercy)
+                                    }) { Text("+1") }
+                                    Spacer(Modifier.width(8.dp))
+                                    Button(onClick = {
+                                        mercy = 0
+                                        save("mercy", mercy)
+                                    }) { Text("Sıfırla") }
+                                }
+                                Spacer(Modifier.height(16.dp))
+                                OutlinedTextField(
+                                    value = probability,
+                                    onValueChange = { probability = it },
+                                    label = { Text("Temel ihtimal (%)") },
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Decimal
                                     )
                                 )
+                                val chance = probability.toDoubleOrNull() ?: 0.0
+                                val estimate = 100.0 - (100.0 - chance).coerceIn(0.0, 100.0)
+                                Text("Girilen temel ihtimal: %${"%.2f".format(chance)}")
+                                Text("Not: Bu sayaç tahmini takip içindir; gerçek oyun ihtimalini değiştirmez.")
                             }
-                        }
 
-                        val filtered = champions.filter {
-                            (rarity == "Tümü" || it.rarity == rarity) &&
-                                it.name.contains(search, ignoreCase = true)
-                        }
+                            2 -> {
+                                Text("KAYNAKLAR", style = MaterialTheme.typography.titleLarge)
+                                Spacer(Modifier.height(12.dp))
 
-                        Text(
-                            "${filtered.size} şampiyon bulundu",
-                            color = Muted
-                        )
+                                @Composable
+                                fun ResourceRow(
+                                    title: String,
+                                    value: Int,
+                                    change: (Int) -> Unit
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("$title: $value")
+                                        Row {
+                                            TextButton(onClick = {
+                                                if (value > 0) change(value - 1)
+                                            }) { Text("-") }
+                                            TextButton(onClick = {
+                                                change(value + 1)
+                                            }) { Text("+") }
+                                        }
+                                    }
+                                }
 
-                        LazyColumn(
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            items(filtered) { champion ->
-                                ChampionCard(champion)
+                                ResourceRow("Antik", ancient) {
+                                    ancient = it
+                                    save("ancient", it)
+                                }
+                                ResourceRow("Hiçlik", voidShard) {
+                                    voidShard = it
+                                    save("void", it)
+                                }
+                                ResourceRow("Kutsal", sacred) {
+                                    sacred = it
+                                    save("sacred", it)
+                                }
+                                ResourceRow("İlkel", primal) {
+                                    primal = it
+                                    save("primal", it)
+                                }
+                            }
+
+                            3 -> {
+                                Text("ŞAMPİYONLAR", style = MaterialTheme.typography.titleLarge)
+                                Spacer(Modifier.height(8.dp))
+                                OutlinedTextField(
+                                    value = search,
+                                    onValueChange = { search = it },
+                                    label = { Text("Şampiyon ara") },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                Row {
+                                    listOf("Tümü", "Efsanevi", "Mitik").forEach {
+                                        FilterChip(
+                                            selected = filter == it,
+                                            onClick = { filter = it },
+                                            label = { Text(it) },
+                                            modifier = Modifier.padding(end = 4.dp)
+                                        )
+                                    }
+                                }
+                                val shown = champions.filter {
+                                    (filter == "Tümü" || it.rarity == filter) &&
+                                    it.name.contains(search, ignoreCase = true)
+                                }
+                                LazyColumn {
+                                    items(shown) { champion ->
+                                        Card(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 4.dp)
+                                        ) {
+                                            Column(Modifier.padding(12.dp)) {
+                                                Text(
+                                                    champion.name,
+                                                    style = MaterialTheme.typography.titleMedium
+                                                )
+                                                Text("${champion.rarity} • ${champion.faction}")
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -342,98 +222,4 @@ fun RaidApp() {
             }
         }
     }
-}
-
-@Composable
-private fun ChampionCard(champion: Champion) {
-    val rarityColor = when (champion.rarity) {
-        "Mitik" -> MythicPink
-        else -> Gold
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Panel),
-        border = BorderStroke(1.dp, rarityColor.copy(alpha = 0.7f)),
-        shape = RoundedCornerShape(14.dp)
-    ) {
-        Row(
-            Modifier.padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Box(
-                Modifier.size(58.dp)
-                    .background(rarityColor.copy(alpha = 0.18f), CircleShape),
-                contentAlignment = androidx.compose.ui.Alignment.Center
-            ) {
-                Text(
-                    champion.name.take(1),
-                    color = rarityColor,
-                    fontSize = 25.sp,
-                    fontWeight = FontWeight.Black
-                )
-            }
-
-            Column(
-                Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    champion.name,
-                    color = Cream,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
-                )
-                Text(champion.rarity, color = rarityColor)
-                Text(champion.faction, color = Muted, fontSize = 12.sp)
-            }
-        }
-    }
-}
-
-@Composable
-private fun PanelCard(
-    title: String,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = Panel),
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, Gold.copy(alpha = .55f))
-    ) {
-        Column(
-            Modifier.fillMaxWidth().padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Text(
-                title,
-                color = Gold,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
-            )
-            content()
-        }
-    }
-}
-
-@Composable
-private fun NumberInput(
-    value: String,
-    onValue: (String) -> Unit,
-    label: String
-) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = {
-            onValue(it.filter { c ->
-                c.isDigit() || c == '.' || c == ','
-            })
-        },
-        label = { Text(label) },
-        keyboardOptions = KeyboardOptions(
-            keyboardType = KeyboardType.Decimal
-        ),
-        modifier = Modifier.fillMaxWidth(),
-        singleLine = true
-    )
 }
