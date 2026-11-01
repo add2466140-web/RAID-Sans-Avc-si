@@ -1,21 +1,28 @@
+
 package com.raidsansavcisi
 
-import android.os.Bundle
 import android.content.Context
+import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
 
-data class Champion(val name: String, val rarity: String, val faction: String)
+data class Champion(
+    val name: String,
+    val rarity: String,
+    val faction: String
+)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -31,11 +38,14 @@ class MainActivity : ComponentActivity() {
                 var voidShard by remember { mutableIntStateOf(prefs.getInt("void", 0)) }
                 var sacred by remember { mutableIntStateOf(prefs.getInt("sacred", 0)) }
                 var primal by remember { mutableIntStateOf(prefs.getInt("primal", 0)) }
-                var mercy by remember { mutableIntStateOf(prefs.getInt("mercy", 0)) }
 
-                var probability by remember { mutableStateOf("1") }
-                var filter by remember { mutableStateOf("Tümü") }
+                var ancientMercy by remember { mutableIntStateOf(prefs.getInt("mercy_ancient", prefs.getInt("mercy", 0))) }
+                var voidMercy by remember { mutableIntStateOf(prefs.getInt("mercy_void", 0)) }
+                var sacredMercy by remember { mutableIntStateOf(prefs.getInt("mercy_sacred", 0)) }
+                var primalMercy by remember { mutableIntStateOf(prefs.getInt("mercy_primal", 0)) }
+
                 var search by remember { mutableStateOf("") }
+                var filter by remember { mutableStateOf("Tümü") }
                 var ownedOnly by remember { mutableStateOf(false) }
 
                 var owned by remember {
@@ -52,8 +62,27 @@ class MainActivity : ComponentActivity() {
                 var skills by remember { mutableStateOf("") }
                 var equipment by remember { mutableStateOf("") }
 
-                fun save(key: String, value: Int) {
+                var dungeon by remember {
+                    mutableStateOf(prefs.getString("dungeon_name", "Ejderha") ?: "Ejderha")
+                }
+                var dungeonStage by remember {
+                    mutableStateOf(prefs.getString("dungeon_stage", "1") ?: "1")
+                }
+                var farmGoal by remember {
+                    mutableStateOf(prefs.getString("farm_goal", "") ?: "")
+                }
+                var farmNotes by remember {
+                    mutableStateOf(prefs.getString("farm_notes", "") ?: "")
+                }
+
+                var probability by remember { mutableStateOf("1") }
+
+                fun saveInt(key: String, value: Int) {
                     prefs.edit().putInt(key, value).apply()
+                }
+
+                fun saveText(key: String, value: String) {
+                    prefs.edit().putString(key, value).apply()
                 }
 
                 val champions = listOf(
@@ -76,7 +105,7 @@ class MainActivity : ComponentActivity() {
                     Champion("Frolni", "Mitik", "Dwarves")
                 )
 
-                fun loadDetails(champion: Champion) {
+                fun openChampion(champion: Champion) {
                     selectedChampion = champion
                     level = prefs.getString("${champion.name}_level", "1") ?: "1"
                     stars = prefs.getString("${champion.name}_stars", "1") ?: "1"
@@ -94,20 +123,21 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier.padding(16.dp)
                             )
 
-                            TabRow(selectedTabIndex = tab) {
-                                listOf("Özet", "Mercy", "Kaynaklar", "Şampiyonlar")
-                                    .forEachIndexed { index, title ->
-                                        Tab(
-                                            selected = tab == index,
-                                            onClick = { tab = index },
-                                            text = { Text(title) }
-                                        )
-                                    }
+                            ScrollableTabRow(selectedTabIndex = tab) {
+                                listOf(
+                                    "Özet", "Mercy", "Kaynaklar",
+                                    "Şampiyonlar", "Zindan / Farm"
+                                ).forEachIndexed { index, title ->
+                                    Tab(
+                                        selected = tab == index,
+                                        onClick = { tab = index },
+                                        text = { Text(title) }
+                                    )
+                                }
                             }
                         }
                     }
                 ) { padding ->
-
                     Column(
                         modifier = Modifier
                             .padding(padding)
@@ -116,95 +146,81 @@ class MainActivity : ComponentActivity() {
                     ) {
                         when (tab) {
                             0 -> {
-                                Text("Hoş geldin!")
+                                Text("GENEL ÖZET", style = MaterialTheme.typography.titleLarge)
                                 Spacer(Modifier.height(12.dp))
-                                Text("Antik: $ancient")
-                                Text("Hiçlik: $voidShard")
-                                Text("Kutsal: $sacred")
-                                Text("İlkel: $primal")
-                                Text("Mercy sayacı: $mercy")
+                                Text("Antik parça: $ancient")
+                                Text("Hiçlik parçası: $voidShard")
+                                Text("Kutsal parça: $sacred")
+                                Text("İlkel parça: $primal")
+                                HorizontalDivider(Modifier.padding(vertical = 12.dp))
+                                Text("Antik Mercy: $ancientMercy")
+                                Text("Hiçlik Mercy: $voidMercy")
+                                Text("Kutsal Mercy: $sacredMercy")
+                                Text("İlkel Mercy: $primalMercy")
+                                HorizontalDivider(Modifier.padding(vertical = 12.dp))
                                 Text("Sahip olduğun şampiyon: ${owned.size}")
+                                Text("Kayıtlı şampiyon listesi: ${champions.size}")
+                                Text("Son farm hedefi: $farmGoal")
                             }
 
                             1 -> {
                                 Text("MERCY TAKİBİ", style = MaterialTheme.typography.titleLarge)
-                                Spacer(Modifier.height(12.dp))
-                                Text("Mercy sayacı: $mercy")
+                                Spacer(Modifier.height(8.dp))
+                                Text("Her parça türünün sayacını ayrı takip et.")
 
-                                Row {
-                                    Button(onClick = {
-                                        mercy++
-                                        save("mercy", mercy)
-                                    }) { Text("+1") }
-
-                                    Spacer(Modifier.width(8.dp))
-
-                                    Button(onClick = {
-                                        mercy = 0
-                                        save("mercy", mercy)
-                                    }) { Text("Sıfırla") }
+                                MercyRow("Antik", ancientMercy) {
+                                    ancientMercy = it
+                                    saveInt("mercy_ancient", it)
+                                    saveInt("mercy", it)
+                                }
+                                MercyRow("Hiçlik", voidMercy) {
+                                    voidMercy = it
+                                    saveInt("mercy_void", it)
+                                }
+                                MercyRow("Kutsal", sacredMercy) {
+                                    sacredMercy = it
+                                    saveInt("mercy_sacred", it)
+                                }
+                                MercyRow("İlkel", primalMercy) {
+                                    primalMercy = it
+                                    saveInt("mercy_primal", it)
                                 }
 
-                                Spacer(Modifier.height(16.dp))
-
+                                Spacer(Modifier.height(12.dp))
                                 OutlinedTextField(
                                     value = probability,
                                     onValueChange = { probability = it },
                                     label = { Text("Temel ihtimal (%)") },
                                     keyboardOptions = KeyboardOptions(
                                         keyboardType = KeyboardType.Decimal
-                                    )
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
                                 )
-
-                                Text("Girilen temel ihtimal: %$probability")
-                                Text("Bu değer yalnızca tahmini takip içindir.")
+                                Text("Girdiğin temel ihtimal: %$probability")
+                                Text(
+                                    "Bu alan bilgilendirme amaçlıdır. Oyun içi gerçek çağırma ihtimali veya garanti vermez."
+                                )
                             }
 
                             2 -> {
                                 Text("KAYNAKLAR", style = MaterialTheme.typography.titleLarge)
-                                Spacer(Modifier.height(12.dp))
-
-                                @Composable
-                                fun ResourceRow(
-                                    title: String,
-                                    value: Int,
-                                    change: (Int) -> Unit
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Text("$title: $value")
-                                        Row {
-                                            TextButton(onClick = {
-                                                if (value > 0) change(value - 1)
-                                            }) { Text("-") }
-
-                                            TextButton(onClick = {
-                                                change(value + 1)
-                                            }) { Text("+") }
-                                        }
-                                    }
-                                }
+                                Spacer(Modifier.height(8.dp))
 
                                 ResourceRow("Antik", ancient) {
                                     ancient = it
-                                    save("ancient", it)
+                                    saveInt("ancient", it)
                                 }
-
                                 ResourceRow("Hiçlik", voidShard) {
                                     voidShard = it
-                                    save("void", it)
+                                    saveInt("void", it)
                                 }
-
                                 ResourceRow("Kutsal", sacred) {
                                     sacred = it
-                                    save("sacred", it)
+                                    saveInt("sacred", it)
                                 }
-
                                 ResourceRow("İlkel", primal) {
                                     primal = it
-                                    save("primal", it)
+                                    saveInt("primal", it)
                                 }
                             }
 
@@ -213,10 +229,7 @@ class MainActivity : ComponentActivity() {
                                     "ŞAMPİYON KOLEKSİYONUM",
                                     style = MaterialTheme.typography.titleLarge
                                 )
-
                                 Text("Sahip olduğun: ${owned.size}")
-
-                                Spacer(Modifier.height(8.dp))
 
                                 OutlinedTextField(
                                     value = search,
@@ -225,15 +238,13 @@ class MainActivity : ComponentActivity() {
                                     modifier = Modifier.fillMaxWidth()
                                 )
 
-                                Spacer(Modifier.height(8.dp))
-
-                                Row {
+                                Row(modifier = Modifier.horizontalScrollCompat()) {
                                     listOf("Tümü", "Efsanevi", "Mitik").forEach {
                                         FilterChip(
                                             selected = filter == it,
                                             onClick = { filter = it },
                                             label = { Text(it) },
-                                            modifier = Modifier.padding(end = 4.dp)
+                                            modifier = Modifier.padding(end = 6.dp)
                                         )
                                     }
                                 }
@@ -256,49 +267,109 @@ class MainActivity : ComponentActivity() {
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .padding(vertical = 4.dp)
-                                                .clickable {
-                                                    loadDetails(champion)
-                                                }
+                                                .clickable { openChampion(champion) }
                                         ) {
                                             Column(Modifier.padding(12.dp)) {
                                                 Text(
                                                     champion.name,
                                                     style = MaterialTheme.typography.titleMedium
                                                 )
-
                                                 Text("${champion.rarity} • ${champion.faction}")
-                                                Text("Detayları açmak için dokun")
+                                                Text("Detayları açmak için karta dokun")
 
-                                                Spacer(Modifier.height(8.dp))
-
-                                                Button(
-                                                    onClick = {
+                                                Row {
+                                                    Button(onClick = {
                                                         val updated = owned.toMutableSet()
-
                                                         if (updated.contains(champion.name)) {
                                                             updated.remove(champion.name)
                                                         } else {
                                                             updated.add(champion.name)
                                                         }
-
                                                         owned = updated.toSet()
-
                                                         prefs.edit()
                                                             .putStringSet("owned_champions", owned)
                                                             .apply()
+                                                    }) {
+                                                        Text(
+                                                            if (owned.contains(champion.name))
+                                                                "✓ Sahibim"
+                                                            else
+                                                                "+ Sahibim"
+                                                        )
                                                     }
-                                                ) {
-                                                    Text(
-                                                        if (owned.contains(champion.name))
-                                                            "✓ Sahibim"
-                                                        else
-                                                            "+ Sahibim"
-                                                    )
+
+                                                    Spacer(Modifier.width(8.dp))
+                                                    TextButton(onClick = {
+                                                        openChampion(champion)
+                                                    }) {
+                                                        Text("Detay")
+                                                    }
                                                 }
                                             }
                                         }
                                     }
                                 }
+                            }
+
+                            4 -> {
+                                Text("ZİNDAN VE FARM TAKİBİ", style = MaterialTheme.typography.titleLarge)
+                                Spacer(Modifier.height(8.dp))
+
+                                Text("Zindan seç")
+                                listOf(
+                                    "Ejderha", "Ateş Şövalyesi", "Örümcek",
+                                    "Buz Golemi", "Minotor", "Golem Kulesi"
+                                ).forEach { name ->
+                                    FilterChip(
+                                        selected = dungeon == name,
+                                        onClick = {
+                                            dungeon = name
+                                            saveText("dungeon_name", name)
+                                        },
+                                        label = { Text(name) },
+                                        modifier = Modifier.padding(end = 4.dp)
+                                    )
+                                }
+
+                                OutlinedTextField(
+                                    value = dungeonStage,
+                                    onValueChange = {
+                                        dungeonStage = it
+                                        saveText("dungeon_stage", it)
+                                    },
+                                    label = { Text("Ulaştığın aşama") },
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Number
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                OutlinedTextField(
+                                    value = farmGoal,
+                                    onValueChange = {
+                                        farmGoal = it
+                                        saveText("farm_goal", it)
+                                    },
+                                    label = { Text("Farm hedefin") },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                OutlinedTextField(
+                                    value = farmNotes,
+                                    onValueChange = {
+                                        farmNotes = it
+                                        saveText("farm_notes", it)
+                                    },
+                                    label = { Text("Farm notları") },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 100.dp)
+                                )
+
+                                Spacer(Modifier.height(8.dp))
+                                Text("Seçili zindan: $dungeon")
+                                Text("Aşama: $dungeonStage")
+                                Text("Hedef: $farmGoal")
                             }
                         }
                     }
@@ -313,9 +384,9 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .heightIn(max = 480.dp)
+                                    .verticalScroll(rememberScrollState())
                             ) {
                                 Text("${champion.rarity} • ${champion.faction}")
-
                                 Spacer(Modifier.height(8.dp))
 
                                 OutlinedTextField(
@@ -324,7 +395,8 @@ class MainActivity : ComponentActivity() {
                                     label = { Text("Seviye (1-60)") },
                                     keyboardOptions = KeyboardOptions(
                                         keyboardType = KeyboardType.Number
-                                    )
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
                                 )
 
                                 OutlinedTextField(
@@ -333,7 +405,8 @@ class MainActivity : ComponentActivity() {
                                     label = { Text("Yıldız (1-6)") },
                                     keyboardOptions = KeyboardOptions(
                                         keyboardType = KeyboardType.Number
-                                    )
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
                                 )
 
                                 OutlinedTextField(
@@ -342,7 +415,8 @@ class MainActivity : ComponentActivity() {
                                     label = { Text("Terfi (0-6)") },
                                     keyboardOptions = KeyboardOptions(
                                         keyboardType = KeyboardType.Number
-                                    )
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
                                 )
 
                                 OutlinedTextField(
@@ -369,7 +443,6 @@ class MainActivity : ComponentActivity() {
                                     .putString("${champion.name}_skills", skills)
                                     .putString("${champion.name}_equipment", equipment)
                                     .apply()
-
                                 selectedChampion = null
                             }) {
                                 Text("Kaydet")
@@ -388,3 +461,68 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
+@Composable
+fun ResourceRow(
+    title: String,
+    value: Int,
+    change: (Int) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 5.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text("$title: $value")
+        Row {
+            TextButton(onClick = {
+                if (value > 0) change(value - 1)
+            }) { Text("-") }
+
+            TextButton(onClick = {
+                change(value + 1)
+            }) { Text("+") }
+        }
+    }
+}
+
+@Composable
+fun MercyRow(
+    title: String,
+    value: Int,
+    change: (Int) -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text("Mercy sayacı: $value")
+            }
+            Row {
+                TextButton(onClick = {
+                    if (value > 0) change(value - 1)
+                }) { Text("-1") }
+
+                TextButton(onClick = {
+                    change(value + 1)
+                }) { Text("+1") }
+
+                TextButton(onClick = {
+                    change(0)
+                }) { Text("Sıfırla") }
+            }
+        }
+    }
+}
+
+fun Modifier.horizontalScrollCompat(): Modifier = this
