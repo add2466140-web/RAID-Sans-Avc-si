@@ -1,3 +1,4 @@
+
 package com.raidsansavcisi
 
 import android.os.Bundle
@@ -25,6 +26,7 @@ private val Panel = Color(0xFF201D18)
 private val Gold = Color(0xFFD6AE55)
 private val Cream = Color(0xFFF4E8CC)
 private val Muted = Color(0xFFB8AD98)
+private val MythicPink = Color(0xFFE879C5)
 
 private data class Champion(
     val name: String,
@@ -37,13 +39,9 @@ private val champions = listOf(
     Champion("Arbiter", "Efsanevi", "Yüce Elfler"),
     Champion("Ninja", "Efsanevi", "Shadowkin"),
     Champion("Searsha", "Efsanevi", "Bilinmiyor"),
-    Champion("Rector Drath", "Epik", "Korkunç Ölüler"),
-    Champion("Uugo", "Epik", "Ogryn Kabileleri"),
-    Champion("Deacon Armstrong", "Epik", "Yüce Elfler"),
-    Champion("Geomancer", "Epik", "Cüceler"),
-    Champion("Apothecary", "Nadir", "Yüce Elfler"),
-    Champion("Coldheart", "Nadir", "Karanlık Elfler"),
-    Champion("Bellower", "Nadir", "Ogryn Kabileleri")
+    Champion("Mikage", "Mitik", "Shadowkin"),
+    Champion("Siegfrund", "Mitik", "Yüce Elfler"),
+    Champion("Frolni", "Mitik", "Cüceler")
 )
 
 class MainActivity : ComponentActivity() {
@@ -73,9 +71,11 @@ fun RaidApp() {
     var rarity by remember { mutableStateOf("Tümü") }
 
     val count = shards.toIntOrNull()?.coerceAtLeast(0) ?: 0
-    val base = baseRate.toDoubleOrNull()?.coerceIn(0.0, 100.0) ?: 0.5
+    val base = baseRate.replace(',', '.').toDoubleOrNull()
+        ?.coerceIn(0.0, 100.0) ?: 0.5
     val start = mercyStart.toIntOrNull()?.coerceAtLeast(0) ?: 200
-    val step = increase.toDoubleOrNull()?.coerceAtLeast(0.0) ?: 0.025
+    val step = increase.replace(',', '.').toDoubleOrNull()
+        ?.coerceAtLeast(0.0) ?: 0.025
     val next = (base + (count + 1 - start).coerceAtLeast(0) * step)
         .coerceIn(0.0, 100.0)
 
@@ -90,9 +90,7 @@ fun RaidApp() {
             secondary = Gold
         )
     ) {
-        Column(
-            Modifier.fillMaxSize().background(Black)
-        ) {
+        Column(Modifier.fillMaxSize().background(Black)) {
             Column(
                 Modifier.fillMaxWidth().background(Panel).padding(18.dp)
             ) {
@@ -122,9 +120,7 @@ fun RaidApp() {
                         NavigationBarItem(
                             selected = tab == i,
                             onClick = { tab = i },
-                            icon = {
-                                Text(listOf("◆", "✦", "▣", "♛")[i])
-                            },
+                            icon = { Text(listOf("◆", "✦", "▣", "♛")[i]) },
                             label = { Text(label, fontSize = 10.sp) },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = Black,
@@ -163,8 +159,7 @@ fun RaidApp() {
                             NumberInput(shards, {
                                 shards = it
                                 prefs.edit().putInt(
-                                    "shards",
-                                    it.toIntOrNull() ?: 0
+                                    "shards", it.toIntOrNull() ?: 0
                                 ).apply()
                             }, "Efsanevi çıkmadan açılan parça")
 
@@ -222,8 +217,7 @@ fun RaidApp() {
                             NumberInput(shards, {
                                 shards = it
                                 prefs.edit().putInt(
-                                    "shards",
-                                    it.toIntOrNull() ?: 0
+                                    "shards", it.toIntOrNull() ?: 0
                                 ).apply()
                             }, "Mercy sayacındaki parça")
 
@@ -231,14 +225,12 @@ fun RaidApp() {
                                 "Sıradaki çağırma için ayarlanmış oran",
                                 color = Muted
                             )
-
                             Text(
                                 String.format("%.3f%%", next),
                                 color = Gold,
                                 fontSize = 30.sp,
                                 fontWeight = FontWeight.Bold
                             )
-
                             Text(
                                 "Bu sonuç yalnızca girdiğin parametrelere dayanır. " +
                                     "Güncel Mercy kuralını resmî oyun açıklamasından doğrula.",
@@ -252,32 +244,28 @@ fun RaidApp() {
                             NumberInput(ancient, {
                                 ancient = it
                                 prefs.edit().putInt(
-                                    "ancient",
-                                    it.toIntOrNull() ?: 0
+                                    "ancient", it.toIntOrNull() ?: 0
                                 ).apply()
                             }, "Antik parça")
 
                             NumberInput(voids, {
                                 voids = it
                                 prefs.edit().putInt(
-                                    "voids",
-                                    it.toIntOrNull() ?: 0
+                                    "voids", it.toIntOrNull() ?: 0
                                 ).apply()
                             }, "Hiçlik parçası")
 
                             NumberInput(sacred, {
                                 sacred = it
                                 prefs.edit().putInt(
-                                    "sacred",
-                                    it.toIntOrNull() ?: 0
+                                    "sacred", it.toIntOrNull() ?: 0
                                 ).apply()
                             }, "Kutsal parça")
 
                             NumberInput(primal, {
                                 primal = it
                                 prefs.edit().putInt(
-                                    "primal",
-                                    it.toIntOrNull() ?: 0
+                                    "primal", it.toIntOrNull() ?: 0
                                 ).apply()
                             }, "Primal parça")
 
@@ -317,22 +305,19 @@ fun RaidApp() {
                         )
 
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            listOf("Tümü", "Efsanevi", "Epik", "Nadir")
-                                .forEach { option ->
-                                    FilterChip(
-                                        selected = rarity == option,
-                                        onClick = { rarity = option },
-                                        label = {
-                                            Text(option, fontSize = 10.sp)
-                                        },
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = Gold,
-                                            selectedLabelColor = Black
-                                        )
+                            listOf("Tümü", "Efsanevi", "Mitik").forEach { option ->
+                                FilterChip(
+                                    selected = rarity == option,
+                                    onClick = { rarity = option },
+                                    label = { Text(option, fontSize = 11.sp) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = Gold,
+                                        selectedLabelColor = Black
                                     )
-                                }
+                                )
+                            }
                         }
 
                         val filtered = champions.filter {
@@ -362,9 +347,8 @@ fun RaidApp() {
 @Composable
 private fun ChampionCard(champion: Champion) {
     val rarityColor = when (champion.rarity) {
-        "Efsanevi" -> Gold
-        "Epik" -> Color(0xFFB078E0)
-        else -> Color(0xFF5B9ED6)
+        "Mitik" -> MythicPink
+        else -> Gold
     }
 
     Card(
