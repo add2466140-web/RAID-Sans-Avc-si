@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -44,6 +45,13 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
+                var selectedChampion by remember { mutableStateOf<Champion?>(null) }
+                var level by remember { mutableStateOf("1") }
+                var stars by remember { mutableStateOf("1") }
+                var ascension by remember { mutableStateOf("0") }
+                var skills by remember { mutableStateOf("") }
+                var equipment by remember { mutableStateOf("") }
+
                 fun save(key: String, value: Int) {
                     prefs.edit().putInt(key, value).apply()
                 }
@@ -67,6 +75,15 @@ class MainActivity : ComponentActivity() {
                     Champion("Siegfrund", "Mitik", "Banner Lords"),
                     Champion("Frolni", "Mitik", "Dwarves")
                 )
+
+                fun loadDetails(champion: Champion) {
+                    selectedChampion = champion
+                    level = prefs.getString("${champion.name}_level", "1") ?: "1"
+                    stars = prefs.getString("${champion.name}_stars", "1") ?: "1"
+                    ascension = prefs.getString("${champion.name}_ascension", "0") ?: "0"
+                    skills = prefs.getString("${champion.name}_skills", "") ?: ""
+                    equipment = prefs.getString("${champion.name}_equipment", "") ?: ""
+                }
 
                 Scaffold(
                     topBar = {
@@ -98,7 +115,6 @@ class MainActivity : ComponentActivity() {
                             .padding(16.dp)
                     ) {
                         when (tab) {
-
                             0 -> {
                                 Text("Hoş geldin!")
                                 Spacer(Modifier.height(12.dp))
@@ -106,17 +122,12 @@ class MainActivity : ComponentActivity() {
                                 Text("Hiçlik: $voidShard")
                                 Text("Kutsal: $sacred")
                                 Text("İlkel: $primal")
-                                Spacer(Modifier.height(12.dp))
                                 Text("Mercy sayacı: $mercy")
                                 Text("Sahip olduğun şampiyon: ${owned.size}")
                             }
 
                             1 -> {
-                                Text(
-                                    "MERCY TAKİBİ",
-                                    style = MaterialTheme.typography.titleLarge
-                                )
-
+                                Text("MERCY TAKİBİ", style = MaterialTheme.typography.titleLarge)
                                 Spacer(Modifier.height(12.dp))
                                 Text("Mercy sayacı: $mercy")
 
@@ -124,18 +135,14 @@ class MainActivity : ComponentActivity() {
                                     Button(onClick = {
                                         mercy++
                                         save("mercy", mercy)
-                                    }) {
-                                        Text("+1")
-                                    }
+                                    }) { Text("+1") }
 
                                     Spacer(Modifier.width(8.dp))
 
                                     Button(onClick = {
                                         mercy = 0
                                         save("mercy", mercy)
-                                    }) {
-                                        Text("Sıfırla")
-                                    }
+                                    }) { Text("Sıfırla") }
                                 }
 
                                 Spacer(Modifier.height(16.dp))
@@ -149,18 +156,12 @@ class MainActivity : ComponentActivity() {
                                     )
                                 )
 
-                                val chance = probability.toDoubleOrNull() ?: 0.0
-
-                                Text("Girilen temel ihtimal: %$chance")
+                                Text("Girilen temel ihtimal: %$probability")
                                 Text("Bu değer yalnızca tahmini takip içindir.")
                             }
 
                             2 -> {
-                                Text(
-                                    "KAYNAKLAR",
-                                    style = MaterialTheme.typography.titleLarge
-                                )
-
+                                Text("KAYNAKLAR", style = MaterialTheme.typography.titleLarge)
                                 Spacer(Modifier.height(12.dp))
 
                                 @Composable
@@ -174,19 +175,14 @@ class MainActivity : ComponentActivity() {
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         Text("$title: $value")
-
                                         Row {
                                             TextButton(onClick = {
                                                 if (value > 0) change(value - 1)
-                                            }) {
-                                                Text("-")
-                                            }
+                                            }) { Text("-") }
 
                                             TextButton(onClick = {
                                                 change(value + 1)
-                                            }) {
-                                                Text("+")
-                                            }
+                                            }) { Text("+") }
                                         }
                                     }
                                 }
@@ -256,23 +252,22 @@ class MainActivity : ComponentActivity() {
 
                                 LazyColumn {
                                     items(shown) { champion ->
-
                                         Card(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .padding(vertical = 4.dp)
+                                                .clickable {
+                                                    loadDetails(champion)
+                                                }
                                         ) {
-                                            Column(
-                                                modifier = Modifier.padding(12.dp)
-                                            ) {
+                                            Column(Modifier.padding(12.dp)) {
                                                 Text(
                                                     champion.name,
                                                     style = MaterialTheme.typography.titleMedium
                                                 )
 
-                                                Text(
-                                                    "${champion.rarity} • ${champion.faction}"
-                                                )
+                                                Text("${champion.rarity} • ${champion.faction}")
+                                                Text("Detayları açmak için dokun")
 
                                                 Spacer(Modifier.height(8.dp))
 
@@ -289,10 +284,7 @@ class MainActivity : ComponentActivity() {
                                                         owned = updated.toSet()
 
                                                         prefs.edit()
-                                                            .putStringSet(
-                                                                "owned_champions",
-                                                                owned
-                                                            )
+                                                            .putStringSet("owned_champions", owned)
                                                             .apply()
                                                     }
                                                 ) {
@@ -310,6 +302,87 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
+                }
+
+                selectedChampion?.let { champion ->
+                    AlertDialog(
+                        onDismissRequest = { selectedChampion = null },
+                        title = { Text(champion.name) },
+                        text = {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 480.dp)
+                            ) {
+                                Text("${champion.rarity} • ${champion.faction}")
+
+                                Spacer(Modifier.height(8.dp))
+
+                                OutlinedTextField(
+                                    value = level,
+                                    onValueChange = { level = it },
+                                    label = { Text("Seviye (1-60)") },
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Number
+                                    )
+                                )
+
+                                OutlinedTextField(
+                                    value = stars,
+                                    onValueChange = { stars = it },
+                                    label = { Text("Yıldız (1-6)") },
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Number
+                                    )
+                                )
+
+                                OutlinedTextField(
+                                    value = ascension,
+                                    onValueChange = { ascension = it },
+                                    label = { Text("Terfi (0-6)") },
+                                    keyboardOptions = KeyboardOptions(
+                                        keyboardType = KeyboardType.Number
+                                    )
+                                )
+
+                                OutlinedTextField(
+                                    value = skills,
+                                    onValueChange = { skills = it },
+                                    label = { Text("Beceri notları") },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                OutlinedTextField(
+                                    value = equipment,
+                                    onValueChange = { equipment = it },
+                                    label = { Text("Ekipman ve aksesuar notları") },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        },
+                        confirmButton = {
+                            Button(onClick = {
+                                prefs.edit()
+                                    .putString("${champion.name}_level", level)
+                                    .putString("${champion.name}_stars", stars)
+                                    .putString("${champion.name}_ascension", ascension)
+                                    .putString("${champion.name}_skills", skills)
+                                    .putString("${champion.name}_equipment", equipment)
+                                    .apply()
+
+                                selectedChampion = null
+                            }) {
+                                Text("Kaydet")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = {
+                                selectedChampion = null
+                            }) {
+                                Text("Kapat")
+                            }
+                        }
+                    )
                 }
             }
         }
