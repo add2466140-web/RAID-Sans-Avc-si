@@ -1,661 +1,744 @@
 
 package com.raidsansavcisi
 
-import android.app.Activity
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+
+private const val CATALOG_URL =
+    "https://raw.githubusercontent.com/PatPat1567/RaidShadowLegendsData/master/champions-base-info.json"
 
 data class Champion(
     val name: String,
-    val rarity: String,
-    val faction: String,
-    val role: String,
-    val uses: String
-)
-
-data class SavedTeam(
-    val name: String,
-    val mode: String,
-    val champions: List<String>
+    val rarity: String = "Bilinmiyor",
+    val affinity: String = "Bilinmiyor",
+    val faction: String = "Bilinmiyor",
+    val role: String = "Destek",
+    val avatarUrl: String = "",
+    val detailsUrl: String = ""
 )
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val prefs = getSharedPreferences("raid_data", Context.MODE_PRIVATE)
+        setContent { RaidApp() }
+    }
+}
 
-        setContent {
-            MaterialTheme {
-                val context = LocalContext.current
+private fun fallbackChampions() = listOf(
+    "Bad-el-Kazar", "Arbiter", "Ninja", "Searsha", "Rotos",
+    "Krisk", "Mithrala", "Trunda", "Gnut", "Duchess Lilitu",
+    "Prince Kymar", "Siphi", "Nekhret", "Turvold", "Mikage",
+    "Siegfrund", "Frolni", "Drexthar Bloodtwin", "Ma'Shalled",
+    "Tomb Lord", "Ithos", "Elenaril", "Nethril", "Skartorsis",
+    "Raglin", "Stag Knight", "Geomancer", "Seer",
+    "Deacon Armstrong", "Maneater", "Pain Keeper", "Uugo",
+    "Alure", "Coldheart", "Apothecary", "Bellower"
+).map { Champion(it) }
 
-                var tab by remember { mutableIntStateOf(0) }
-                var ancient by remember { mutableIntStateOf(prefs.getInt("ancient", 0)) }
-                var voidShard by remember { mutableIntStateOf(prefs.getInt("void", 0)) }
-                var sacred by remember { mutableIntStateOf(prefs.getInt("sacred", 0)) }
-                var primal by remember { mutableIntStateOf(prefs.getInt("primal", 0)) }
+private fun translateRarity(value: String): String = when (value.lowercase()) {
+    "legendary" -> "Efsanevi"
+    "mythical" -> "Mitik"
+    "epic" -> "Epik"
+    "rare" -> "Nadir"
+    "uncommon" -> "Sıradışı"
+    "common" -> "Yaygın"
+    else -> value.ifBlank { "Bilinmiyor" }
+}
 
-                var ancientMercy by remember { mutableIntStateOf(prefs.getInt("mercy_ancient", prefs.getInt("mercy", 0))) }
-                var voidMercy by remember { mutableIntStateOf(prefs.getInt("mercy_void", 0)) }
-                var sacredMercy by remember { mutableIntStateOf(prefs.getInt("mercy_sacred", 0)) }
-                var primalMercy by remember { mutableIntStateOf(prefs.getInt("mercy_primal", 0)) }
+private fun translateRole(value: String): String = when (value.lowercase()) {
+    "attack" -> "Hasar"
+    "defense" -> "Savunma"
+    "support" -> "Destek"
+    "hp" -> "Can"
+    else -> value.ifBlank { "Destek" }
+}
 
-                var search by remember { mutableStateOf("") }
-                var filter by remember { mutableStateOf("Tümü") }
-                var ownedOnly by remember { mutableStateOf(false) }
-                var owned by remember {
-                    mutableStateOf(prefs.getStringSet("owned_champions", emptySet())?.toSet() ?: emptySet())
+private fun parseCatalog(json: String): List<Champion> {
+    val root = JSONObject(json)
+    val result = mutableListOf<Champion>()
+    val keys = root.keys()
+
+    while (keys.hasNext()) {
+        val name = keys.next()
+        val item = root.optJSONObject(name) ?: continue
+
+        result.add(
+            Champion(
+                name = name,
+                rarity = translateRarity(item.optString("rarity")),
+                affinity = item.optString("affinity", "Bilinmiyor"),
+                faction = item.optString("faction", "Bilinmiyor"),
+                role = translateRole(item.optString("role")),
+                avatarUrl = item.optString("avatarUrl"),
+                detailsUrl = item.optString("detailsUrl")
+            )
+        )
+    }
+    return result.sortedBy { it.name }
+}
+
+private suspend fun downloadCatalog(): String? = withContext(Dispatchers.IO) {
+    try {
+        val connection = URL(CATALOG_URL).openConnection() as HttpURLConnection
+        connection.connectTimeout = 12000
+        connection.readTimeout = 12000
+        connection.requestMethod = "GET"
+        connection.connect()
+
+        val result = connection.inputStream.bufferedReader().use { it.readText() }
+        connection.disconnect()
+        result.takeIf { it.isNotBlank() }
+    } catch (_: Exception) {
+        null
+    }
+}
+
+@Composable
+fun RaidApp() {
+    val context = LocalContext.current
+    val prefs = remember {
+        context.getSharedPreferences("raid_data", Context.MODE_PRIVATE)
+    }
+
+    var tab by remember { mutableStateOf("Özet") }
+    var champions by remember { mutableStateOf(fallbackChampions()) }
+    var loading by remember { mutableStateOf(true) }
+    var catalogMessage by remember { mutableStateOf("Şampiyon kataloğu hazırlanıyor") }
+
+    var ancient by remember { mutableIntStateOf(prefs.getInt("ancient", 0)) }
+    var voidShard by remember { mutableIntStateOf(prefs.getInt("void", 0)) }
+    var sacred by remember { mutableIntStateOf(prefs.getInt("sacred", 0)) }
+    var primal by remember { mutableIntStateOf(prefs.getInt("primal", 0)) }
+
+    var mercyAncient by remember {
+        mutableIntStateOf(prefs.getInt("mercy_ancient", prefs.getInt("mercy", 0)))
+    }
+    var mercyVoid by remember { mutableIntStateOf(prefs.getInt("mercy_void", 0)) }
+    var mercySacred by remember { mutableIntStateOf(prefs.getInt("mercy_sacred", 0)) }
+    var mercyPrimal by remember { mutableIntStateOf(prefs.getInt("mercy_primal", 0)) }
+
+    var owned by remember {
+        mutableStateOf(prefs.getStringSet("owned_champions", emptySet())?.toSet() ?: emptySet())
+    }
+
+    var search by remember { mutableStateOf("") }
+    var rarityFilter by remember { mutableStateOf("Tümü") }
+    var affinityFilter by remember { mutableStateOf("Tümü") }
+    var selectedChampion by remember { mutableStateOf<Champion?>(null) }
+
+    var dungeonName by remember { mutableStateOf(prefs.getString("dungeon_name", "Ejderha") ?: "Ejderha") }
+    var dungeonStage by remember { mutableStateOf(prefs.getInt("dungeon_stage", 13).toString()) }
+    var farmGoal by remember { mutableStateOf(prefs.getString("farm_goal", "") ?: "") }
+    var farmNotes by remember { mutableStateOf(prefs.getString("farm_notes", "") ?: "") }
+
+    var teamMode by remember { mutableStateOf("Hydra") }
+    var savedTeams by remember {
+        mutableStateOf(
+            try {
+                val array = JSONArray(prefs.getString("saved_teams", "[]"))
+                (0 until array.length()).map { array.getString(it) }
+            } catch (_: Exception) {
+                emptyList()
+            }
+        )
+    }
+    var teamSelection by remember { mutableStateOf(emptyList<String>()) }
+
+    fun saveNumber(key: String, value: Int) {
+        prefs.edit().putInt(key, value).apply()
+    }
+
+    fun saveOwned() {
+        prefs.edit().putStringSet("owned_champions", owned.toSet()).apply()
+    }
+
+    fun saveTeams() {
+        val array = JSONArray()
+        savedTeams.forEach { array.put(it) }
+        prefs.edit().putString("saved_teams", array.toString()).apply()
+    }
+
+    LaunchedEffect(Unit) {
+        val cached = prefs.getString("champion_catalog_json", null)
+        if (cached != null) {
+            try {
+                val parsed = parseCatalog(cached)
+                if (parsed.isNotEmpty()) champions = parsed
+            } catch (_: Exception) { }
+        }
+
+        val downloaded = downloadCatalog()
+        if (downloaded != null) {
+            try {
+                val parsed = parseCatalog(downloaded)
+                if (parsed.isNotEmpty()) {
+                    champions = parsed
+                    prefs.edit().putString("champion_catalog_json", downloaded).apply()
+                    catalogMessage = "Şampiyon kataloğu güncellendi"
+                } else {
+                    catalogMessage = "İndirilen katalog boş. Kayıtlı liste kullanılıyor."
                 }
+            } catch (_: Exception) {
+                catalogMessage = "Katalog okunamadı. Kayıtlı liste kullanılıyor."
+            }
+        } else {
+            catalogMessage = "İnternet yok. Kayıtlı katalog kullanılıyor."
+        }
+        loading = false
+    }
 
-                var selectedChampion by remember { mutableStateOf<Champion?>(null) }
-                var level by remember { mutableStateOf("1") }
-                var stars by remember { mutableStateOf("1") }
-                var ascension by remember { mutableStateOf("0") }
-                var skills by remember { mutableStateOf("") }
-                var equipment by remember { mutableStateOf("") }
+    val backupLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                val data = JSONObject()
+                data.put("ancient", ancient)
+                data.put("void", voidShard)
+                data.put("sacred", sacred)
+                data.put("primal", primal)
+                data.put("mercy_ancient", mercyAncient)
+                data.put("mercy_void", mercyVoid)
+                data.put("mercy_sacred", mercySacred)
+                data.put("mercy_primal", mercyPrimal)
+                data.put("owned_champions", JSONArray(owned.toList()))
+                data.put("saved_teams", JSONArray(savedTeams))
+                data.put("dungeon_name", dungeonName)
+                data.put("dungeon_stage", dungeonStage)
+                data.put("farm_goal", farmGoal)
+                data.put("farm_notes", farmNotes)
 
-                var teamName by remember { mutableStateOf("") }
-                var teamMode by remember { mutableStateOf("Hydra") }
-                var selectedTeamChampions by remember { mutableStateOf(setOf<String>()) }
-                var savedTeams by remember {
-                    mutableStateOf(loadTeams(prefs.getString("saved_teams", "[]") ?: "[]"))
+                context.contentResolver.openOutputStream(uri)?.use {
+                    it.write(data.toString(2).toByteArray())
                 }
+            } catch (_: Exception) { }
+        }
+    }
 
-                var suggestionMode by remember { mutableStateOf("Hydra") }
-                var suggestion by remember { mutableStateOf<List<Champion>>(emptyList()) }
+    val restoreLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                val text = context.contentResolver.openInputStream(uri)
+                    ?.bufferedReader()?.use { it.readText() } ?: ""
+                val data = JSONObject(text)
 
-                var dungeon by remember { mutableStateOf(prefs.getString("dungeon_name", "Ejderha") ?: "Ejderha") }
-                var dungeonStage by remember { mutableStateOf(prefs.getString("dungeon_stage", "1") ?: "1") }
-                var farmGoal by remember { mutableStateOf(prefs.getString("farm_goal", "") ?: "") }
-                var farmNotes by remember { mutableStateOf(prefs.getString("farm_notes", "") ?: "") }
+                ancient = data.optInt("ancient", ancient)
+                voidShard = data.optInt("void", voidShard)
+                sacred = data.optInt("sacred", sacred)
+                primal = data.optInt("primal", primal)
+                mercyAncient = data.optInt("mercy_ancient", mercyAncient)
+                mercyVoid = data.optInt("mercy_void", mercyVoid)
+                mercySacred = data.optInt("mercy_sacred", mercySacred)
+                mercyPrimal = data.optInt("mercy_primal", mercyPrimal)
 
-                var probability by remember { mutableStateOf("1") }
-                var message by remember { mutableStateOf("") }
+                val ownedArray = data.optJSONArray("owned_champions") ?: JSONArray()
+                owned = (0 until ownedArray.length()).map { ownedArray.getString(it) }.toSet()
 
-                val champions = listOf(
-                    Champion("Bad-el-Kazar", "Efsanevi", "Undead Hordes", "Destek", "İyileştirme, zehir ve arındırma"),
-                    Champion("Arbiter", "Efsanevi", "High Elves", "Destek", "Hız, diriltme ve saldırı artırma"),
-                    Champion("Ninja", "Efsanevi", "Shadowkin", "Hasar", "Patron ve zindan hasarı"),
-                    Champion("Searsha", "Efsanevi", "Bilinmiyor", "Hasar", "Kullanım bilgisi oyuncu notlarına bağlı"),
-                    Champion("Rotos", "Efsanevi", "Undead Hordes", "Hasar", "Arena ve tek hedef hasarı"),
-                    Champion("Krisk", "Efsanevi", "Lizardmen", "Savunma", "Kışkırtma, savunma ve takım desteği"),
-                    Champion("Mithrala", "Efsanevi", "Dark Elves", "Destek", "Kalkan, güçlendirme ve kontrol"),
-                    Champion("Trunda", "Efsanevi", "Dwarves", "Hasar", "Arena ve alan hasarı"),
-                    Champion("Gnut", "Efsanevi", "Dwarves", "Hasar", "Patron ve zindan hasarı"),
-                    Champion("Duchess Lilitu", "Efsanevi", "Demonspawn", "Destek", "Diriltme ve hasar azaltma"),
-                    Champion("Prince Kymar", "Efsanevi", "Demonspawn", "Kontrol", "Beceri sıfırlama ve kontrol"),
-                    Champion("Siphi", "Efsanevi", "Undead Hordes", "Destek", "İyileştirme, hız ve diriltme"),
-                    Champion("Nekhret", "Efsanevi", "Undead Hordes", "Destek", "Kalkan ve koruma"),
-                    Champion("Turvold", "Efsanevi", "Barbarians", "Hasar", "Tek hedef hasarı"),
-                    Champion("Mikage", "Mitik", "Shadowkin", "Destek", "Takım desteği ve dönüşüm"),
-                    Champion("Siegfrund", "Mitik", "Banner Lords", "Hasar", "Yüksek hasar"),
-                    Champion("Frolni", "Mitik", "Dwarves", "Hasar", "Hasar ve dayanıklılık"),
+                val teams = data.optJSONArray("saved_teams") ?: JSONArray()
+                savedTeams = (0 until teams.length()).map { teams.getString(it) }
 
-                    Champion("Drexthar Bloodtwin", "Efsanevi", "Demonspawn", "Hasar", "Yanma ve Hydra"),
-                    Champion("Ma'Shalled", "Efsanevi", "Undead Hordes", "Destek", "Hız ve alan hasarı"),
-                    Champion("Tomb Lord", "Efsanevi", "Undead Hordes", "Hasar", "Zehir ve savunma düşürme"),
-                    Champion("Ithos", "Efsanevi", "High Elves", "Hasar", "Alan hasarı"),
-                    Champion("Elenaril", "Efsanevi", "High Elves", "Hasar", "Zehir ve patron"),
-                    Champion("Nethril", "Efsanevi", "Undead Hordes", "Kontrol", "Sersemletme ve zehir"),
-                    Champion("Skartorsis", "Efsanevi", "Undead Hordes", "Destek", "Güçlendirme ve kontrol"),
-                    Champion("Raglin", "Efsanevi", "Banner Lords", "Destek", "İyileştirme ve diriltme"),
-                    Champion("Stag Knight", "Efsanevi", "Banner Lords", "Destek", "Savunma ve saldırı düşürme"),
-                    Champion("Geomancer", "Epik", "Dwarves", "Hasar", "Patron ve yansıtma hasarı"),
-                    Champion("Seer", "Epik", "Orcs", "Hasar", "Güçlendirme tüketen alan hasarı"),
-                    Champion("Deacon Armstrong", "Epik", "Sacred Order", "Destek", "Hız ve savunma düşürme"),
-                    Champion("Maneater", "Epik", "Demonspawn", "Destek", "Ölümsüzlük ve patron takımı"),
-                    Champion("Pain Keeper", "Epik", "Dark Elves", "Destek", "Bekleme süresi azaltma"),
-                    Champion("Uugo", "Epik", "Orcs", "Destek", "İyileştirme ve savunma düşürme"),
-                    Champion("Alure", "Epik", "Demonspawn", "Kontrol", "Zindanlarda tur kontrolü"),
-                    Champion("Coldheart", "Nadir", "Dark Elves", "Hasar", "Örümcek ve zindan patronları"),
-                    Champion("Apothecary", "Nadir", "High Elves", "Destek", "Hız ve iyileştirme"),
-                    Champion("Bellower", "Nadir", "Ogryn Tribes", "Hasar", "Dalga temizleme")
-                )
+                dungeonName = data.optString("dungeon_name", dungeonName)
+                dungeonStage = data.optString("dungeon_stage", dungeonStage)
+                farmGoal = data.optString("farm_goal", farmGoal)
+                farmNotes = data.optString("farm_notes", farmNotes)
 
-                fun saveInt(key: String, value: Int) {
-                    prefs.edit().putInt(key, value).apply()
+                prefs.edit()
+                    .putInt("ancient", ancient)
+                    .putInt("void", voidShard)
+                    .putInt("sacred", sacred)
+                    .putInt("primal", primal)
+                    .putInt("mercy_ancient", mercyAncient)
+                    .putInt("mercy_void", mercyVoid)
+                    .putInt("mercy_sacred", mercySacred)
+                    .putInt("mercy_primal", mercyPrimal)
+                    .putStringSet("owned_champions", owned)
+                    .putString("dungeon_name", dungeonName)
+                    .putInt("dungeon_stage", dungeonStage.toIntOrNull() ?: 13)
+                    .putString("farm_goal", farmGoal)
+                    .putString("farm_notes", farmNotes)
+                    .apply()
+                saveTeams()
+            } catch (_: Exception) { }
+        }
+    }
+
+    MaterialTheme {
+        Scaffold(
+            topBar = {
+                Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                    Text("RAID Şans Avcısı", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text(catalogMessage, style = MaterialTheme.typography.bodySmall)
                 }
-
-                fun saveText(key: String, value: String) {
-                    prefs.edit().putString(key, value).apply()
+            },
+            bottomBar = {
+                NavigationBar {
+                    listOf("Özet", "Mercy", "Kaynaklar", "Şampiyonlar", "Takım", "Zindan", "Yedek").forEach {
+                        NavigationBarItem(
+                            selected = tab == it,
+                            onClick = { tab = it },
+                            icon = { Text(it.take(1)) },
+                            label = { Text(it) }
+                        )
+                    }
                 }
-
-                fun saveTeams() {
-                    prefs.edit().putString("saved_teams", teamsToJson(savedTeams)).apply()
-                }
-
-                fun openChampion(champion: Champion) {
-                    selectedChampion = champion
-                    level = prefs.getString("${champion.name}_level", "1") ?: "1"
-                    stars = prefs.getString("${champion.name}_stars", "1") ?: "1"
-                    ascension = prefs.getString("${champion.name}_ascension", "0") ?: "0"
-                    skills = prefs.getString("${champion.name}_skills", "") ?: ""
-                    equipment = prefs.getString("${champion.name}_equipment", "") ?: ""
-                }
-
-                fun suggestTeam() {
-                    val available = champions.filter { owned.contains(it.name) }
-                    val priority = when (suggestionMode) {
-                        "Hydra" -> listOf("Destek", "Kontrol", "Hasar", "Savunma")
-                        "Arena Saldırı" -> listOf("Destek", "Hasar", "Kontrol", "Savunma")
-                        "Arena Savunma" -> listOf("Savunma", "Destek", "Kontrol", "Hasar")
-                        "Ejderha", "Örümcek", "Ateş Şövalyesi", "Buz Golemi" ->
-                            listOf("Hasar", "Destek", "Kontrol", "Savunma")
-                        else -> listOf("Destek", "Hasar", "Savunma", "Kontrol")
+            }
+        ) { padding ->
+            Column(
+                Modifier.fillMaxSize().padding(padding).padding(horizontal = 14.dp)
+            ) {
+                when (tab) {
+                    "Özet" -> {
+                        Text("Hesap özeti", style = MaterialTheme.typography.titleLarge)
+                        Spacer(Modifier.height(12.dp))
+                        SummaryCard("Kadim Parça", ancient)
+                        SummaryCard("Hiçlik Parçası", voidShard)
+                        SummaryCard("Kutsal Parça", sacred)
+                        SummaryCard("İlkel Parça", primal)
+                        Spacer(Modifier.height(12.dp))
+                        Text("Koleksiyon: ${owned.size} şampiyon")
+                        Text("Katalog: ${champions.size} şampiyon")
+                        if (loading) CircularProgressIndicator()
                     }
 
-                    val chosen = mutableListOf<Champion>()
-                    priority.forEach { role ->
-                        available.filter { it.role == role && it !in chosen }
-                            .forEach { if (chosen.size < 5) chosen.add(it) }
-                    }
-                    available.filter { it !in chosen }.forEach {
-                        if (chosen.size < 5) chosen.add(it)
-                    }
-                    suggestion = chosen.take(5)
-                }
-
-                val exportLauncher = rememberLauncherForActivityResult(
-                    ActivityResultContracts.CreateDocument("application/json")
-                ) { uri: Uri? ->
-                    if (uri != null) {
-                        try {
-                            val backup = JSONObject()
-                            prefs.all.forEach { (key, value) ->
-                                when (value) {
-                                    is Set<*> -> backup.put(key, JSONArray(value.toList()))
-                                    is String, is Int, is Long, is Float, is Boolean -> backup.put(key, value)
-                                }
-                            }
-                            context.contentResolver.openOutputStream(uri)?.use {
-                                it.write(backup.toString(2).toByteArray())
-                            }
-                            message = "Yedekleme dosyası oluşturuldu."
-                        } catch (e: Exception) {
-                            message = "Yedekleme başarısız: ${e.message}"
+                    "Kaynaklar" -> {
+                        Text("Parça sayıları", style = MaterialTheme.typography.titleLarge)
+                        NumberEditor("Kadim", ancient) {
+                            ancient = it.coerceAtLeast(0); saveNumber("ancient", ancient)
+                        }
+                        NumberEditor("Hiçlik", voidShard) {
+                            voidShard = it.coerceAtLeast(0); saveNumber("void", voidShard)
+                        }
+                        NumberEditor("Kutsal", sacred) {
+                            sacred = it.coerceAtLeast(0); saveNumber("sacred", sacred)
+                        }
+                        NumberEditor("İlkel", primal) {
+                            primal = it.coerceAtLeast(0); saveNumber("primal", primal)
                         }
                     }
-                }
 
-                val importLauncher = rememberLauncherForActivityResult(
-                    ActivityResultContracts.OpenDocument()
-                ) { uri: Uri? ->
-                    if (uri != null) {
-                        try {
-                            val content = context.contentResolver.openInputStream(uri)
-                                ?.bufferedReader()?.use { it.readText() }
-                                ?: throw Exception("Dosya okunamadı")
-                            val backup = JSONObject(content)
-                            val editor = prefs.edit().clear()
-                            val keys = backup.keys()
-                            while (keys.hasNext()) {
-                                val key = keys.next()
-                                when (val value = backup.get(key)) {
-                                    is JSONArray -> {
-                                        val set = mutableSetOf<String>()
-                                        for (i in 0 until value.length()) set.add(value.getString(i))
-                                        editor.putStringSet(key, set)
-                                    }
-                                    is String -> editor.putString(key, value)
-                                    is Int -> editor.putInt(key, value)
-                                    is Long -> editor.putLong(key, value)
-                                    is Boolean -> editor.putBoolean(key, value)
-                                    is Number -> editor.putInt(key, value.toInt())
-                                }
-                            }
-                            editor.apply()
-                            message = "Yedek geri yüklendi. Uygulama yenileniyor."
-                            (context as? Activity)?.recreate()
-                        } catch (e: Exception) {
-                            message = "Geri yükleme başarısız: ${e.message}"
+                    "Mercy" -> {
+                        Text("Mercy takibi", style = MaterialTheme.typography.titleLarge)
+                        Text("Sayaçlarını kendi oyun hesabındaki değerlere göre güncelle.")
+                        NumberEditor("Kadim Mercy", mercyAncient) {
+                            mercyAncient = it.coerceAtLeast(0)
+                            saveNumber("mercy_ancient", mercyAncient)
+                        }
+                        NumberEditor("Hiçlik Mercy", mercyVoid) {
+                            mercyVoid = it.coerceAtLeast(0)
+                            saveNumber("mercy_void", mercyVoid)
+                        }
+                        NumberEditor("Kutsal Mercy", mercySacred) {
+                            mercySacred = it.coerceAtLeast(0)
+                            saveNumber("mercy_sacred", mercySacred)
+                        }
+                        NumberEditor("İlkel Mercy", mercyPrimal) {
+                            mercyPrimal = it.coerceAtLeast(0)
+                            saveNumber("mercy_primal", mercyPrimal)
                         }
                     }
-                }
 
-                Scaffold(
-                    topBar = {
-                        Column {
-                            Text(
-                                "RAID ŞANS AVCISI",
-                                style = MaterialTheme.typography.headlineSmall,
-                                modifier = Modifier.padding(16.dp)
-                            )
-                            ScrollableTabRow(selectedTabIndex = tab) {
-                                listOf("Özet", "Mercy", "Kaynaklar", "Şampiyonlar", "Takım", "Zindan", "Yedek")
-                                    .forEachIndexed { index, title ->
-                                        Tab(selected = tab == index, onClick = { tab = index }, text = { Text(title) })
+                    "Şampiyonlar" -> {
+                        Text("Şampiyon kataloğu", style = MaterialTheme.typography.titleLarge)
+                        OutlinedTextField(
+                            value = search,
+                            onValueChange = { search = it },
+                            label = { Text("Şampiyon ara") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            FilterMenu("Nadirlik", rarityFilter,
+                                listOf("Tümü", "Efsanevi", "Mitik", "Epik", "Nadir", "Sıradışı", "Yaygın")
+                            ) { rarityFilter = it }
+                            Spacer(Modifier.width(8.dp))
+                            FilterMenu("Element", affinityFilter,
+                                listOf("Tümü", "Magic", "Force", "Spirit", "Void")
+                            ) { affinityFilter = it }
+                        }
+
+                        val filtered = champions.filter {
+                            it.name.contains(search, true) &&
+                            (rarityFilter == "Tümü" || it.rarity == rarityFilter) &&
+                            (affinityFilter == "Tümü" || it.affinity.equals(affinityFilter, true))
+                        }
+
+                        Text("${filtered.size} şampiyon bulundu")
+                        LazyColumn {
+                            items(filtered, key = { it.name }) { champion ->
+                                ChampionRow(
+                                    champion = champion,
+                                    isOwned = owned.contains(champion.name),
+                                    onClick = { selectedChampion = champion },
+                                    onToggle = {
+                                        owned = if (owned.contains(champion.name))
+                                            owned - champion.name else owned + champion.name
+                                        saveOwned()
                                     }
+                                )
                             }
                         }
                     }
-                ) { padding ->
-                    Column(
-                        Modifier.fillMaxSize().padding(padding).padding(16.dp)
-                    ) {
-                        when (tab) {
-                            0 -> Column(Modifier.verticalScroll(rememberScrollState())) {
-                                Text("GENEL ÖZET", style = MaterialTheme.typography.titleLarge)
-                                Spacer(Modifier.height(12.dp))
-                                Text("Antik parça: $ancient")
-                                Text("Hiçlik parçası: $voidShard")
-                                Text("Kutsal parça: $sacred")
-                                Text("İlkel parça: $primal")
-                                HorizontalDivider(Modifier.padding(vertical = 12.dp))
-                                Text("Antik Mercy: $ancientMercy")
-                                Text("Hiçlik Mercy: $voidMercy")
-                                Text("Kutsal Mercy: $sacredMercy")
-                                Text("İlkel Mercy: $primalMercy")
-                                HorizontalDivider(Modifier.padding(vertical = 12.dp))
-                                Text("Sahip olduğun şampiyon: ${owned.size}")
-                                Text("Kayıtlı takım: ${savedTeams.size}")
-                                Text("Farm hedefi: $farmGoal")
-                                Text("Uygulamadaki katalog: ${champions.size} şampiyon")
-                            }
 
-                            1 -> Column(Modifier.verticalScroll(rememberScrollState())) {
-                                Text("MERCY TAKİBİ", style = MaterialTheme.typography.titleLarge)
-                                Text("Her parça türünün sayacını ayrı takip et.")
-                                MercyRow("Antik", ancientMercy) {
-                                    ancientMercy = it
-                                    saveInt("mercy_ancient", it)
-                                    saveInt("mercy", it)
-                                }
-                                MercyRow("Hiçlik", voidMercy) {
-                                    voidMercy = it
-                                    saveInt("mercy_void", it)
-                                }
-                                MercyRow("Kutsal", sacredMercy) {
-                                    sacredMercy = it
-                                    saveInt("mercy_sacred", it)
-                                }
-                                MercyRow("İlkel", primalMercy) {
-                                    primalMercy = it
-                                    saveInt("mercy_primal", it)
-                                }
-                                OutlinedTextField(
-                                    value = probability,
-                                    onValueChange = { probability = it },
-                                    label = { Text("Temel ihtimal (%)") },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                Text("Girilen temel ihtimal: %$probability")
-                                Text("Bilgilendirme amaçlıdır; oyun içi garanti vermez.")
-                            }
+                    "Takım" -> {
+                        Text("Takım oluşturucu", style = MaterialTheme.typography.titleLarge)
+                        FilterMenu(
+                            "İçerik",
+                            teamMode,
+                            listOf("Hydra", "Arena Saldırı", "Arena Savunma", "Zindan", "Boss")
+                        ) { teamMode = it }
 
-                            2 -> Column(Modifier.verticalScroll(rememberScrollState())) {
-                                Text("KAYNAKLAR", style = MaterialTheme.typography.titleLarge)
-                                ResourceRow("Antik", ancient) { ancient = it; saveInt("ancient", it) }
-                                ResourceRow("Hiçlik", voidShard) { voidShard = it; saveInt("void", it) }
-                                ResourceRow("Kutsal", sacred) { sacred = it; saveInt("sacred", it) }
-                                ResourceRow("İlkel", primal) { primal = it; saveInt("primal", it) }
-                            }
-
-                            3 -> Column(Modifier.weight(1f)) {
-                                Text("ŞAMPİYON KOLEKSİYONUM", style = MaterialTheme.typography.titleLarge)
-                                Text("Sahip olduğun: ${owned.size}")
-                                OutlinedTextField(
-                                    value = search,
-                                    onValueChange = { search = it },
-                                    label = { Text("Şampiyon ara") },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                Row {
-                                    listOf("Tümü", "Efsanevi", "Mitik", "Epik", "Nadir").forEach {
-                                        FilterChip(
-                                            selected = filter == it,
-                                            onClick = { filter = it },
-                                            label = { Text(it) },
-                                            modifier = Modifier.padding(end = 3.dp)
-                                        )
+                        val recommended = champions.filter { owned.contains(it.name) }
+                            .sortedBy {
+                                when (teamMode) {
+                                    "Hydra" -> when (it.role) {
+                                        "Destek" -> 0
+                                        "Savunma" -> 1
+                                        "Hasar" -> 2
+                                        else -> 3
+                                    }
+                                    "Arena Saldırı" -> when (it.role) {
+                                        "Hasar" -> 0
+                                        "Destek" -> 1
+                                        else -> 2
+                                    }
+                                    else -> when (it.role) {
+                                        "Destek" -> 0
+                                        "Hasar" -> 1
+                                        else -> 2
                                     }
                                 }
-                                FilterChip(
-                                    selected = ownedOnly,
-                                    onClick = { ownedOnly = !ownedOnly },
-                                    label = { Text("Sadece sahip olduklarım") }
-                                )
-                                val shown = champions.filter {
-                                    (filter == "Tümü" || it.rarity == filter) &&
-                                        it.name.contains(search, ignoreCase = true) &&
-                                        (!ownedOnly || owned.contains(it.name))
-                                }
-                                LazyColumn {
-                                    items(shown) { champion ->
-                                        Card(
-                                            Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                                                .clickable { openChampion(champion) }
-                                        ) {
-                                            Column(Modifier.padding(12.dp)) {
-                                                Text(champion.name, style = MaterialTheme.typography.titleMedium)
-                                                Text("${champion.rarity} • ${champion.faction}")
-                                                Text("Rol: ${champion.role}")
-                                                Text("Kullanım: ${champion.uses}", style = MaterialTheme.typography.bodySmall)
-                                                Row {
-                                                    Button(onClick = {
-                                                        val updated = owned.toMutableSet()
-                                                        if (champion.name in updated) updated.remove(champion.name)
-                                                        else updated.add(champion.name)
-                                                        owned = updated.toSet()
-                                                        prefs.edit().putStringSet("owned_champions", owned).apply()
-                                                    }) {
-                                                        Text(if (champion.name in owned) "✓ Sahibim" else "+ Sahibim")
-                                                    }
-                                                    TextButton(onClick = { openChampion(champion) }) {
-                                                        Text("Detay")
-                                                    }
-                                                }
-                                            }
+                            }.take(5)
+
+                        Text("Önerilen takım")
+                        recommended.forEach { Text("• ${it.name} — ${it.role}") }
+
+                        Spacer(Modifier.height(8.dp))
+                        Text("Takıma şampiyon ekle")
+                        LazyColumn(Modifier.weight(1f)) {
+                            items(champions.filter { owned.contains(it.name) }) { champ ->
+                                Row(
+                                    Modifier.fillMaxWidth().clickable {
+                                        teamSelection = if (teamSelection.contains(champ.name))
+                                            teamSelection - champ.name else teamSelection + champ.name
+                                    }.padding(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = teamSelection.contains(champ.name),
+                                        onCheckedChange = {
+                                            teamSelection = if (it) teamSelection + champ.name
+                                            else teamSelection - champ.name
                                         }
-                                    }
-                                }
-                            }
-
-                            4 -> Column(
-                                Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                            ) {
-                                Text("OTOMATİK TAKIM ÖNERİSİ", style = MaterialTheme.typography.titleLarge)
-                                Text("Öneriler yalnızca koleksiyonunda sahip olarak işaretlediğin şampiyonlardan oluşturulur.")
-                                listOf("Hydra", "Arena Saldırı", "Arena Savunma", "Ejderha",
-                                    "Örümcek", "Ateş Şövalyesi", "Buz Golemi", "Klan Patronu").forEach { mode ->
-                                    FilterChip(
-                                        selected = suggestionMode == mode,
-                                        onClick = { suggestionMode = mode },
-                                        label = { Text(mode) },
-                                        modifier = Modifier.padding(end = 4.dp)
                                     )
-                                }
-                                Button(onClick = { suggestTeam() }, modifier = Modifier.fillMaxWidth()) {
-                                    Text("Takım Öner")
-                                }
-                                if (suggestion.isNotEmpty()) {
-                                    Text("ÖNERİLEN TAKIM", style = MaterialTheme.typography.titleMedium)
-                                    suggestion.forEachIndexed { index, champ ->
-                                        Text("${index + 1}. ${champ.name} — ${champ.role}")
-                                    }
-                                    Text("Bu öneri rol önceliğine dayalı basit bir taslaktır; kesin en iyi takım garantisi değildir.")
-                                    Button(onClick = {
-                                        teamName = "$suggestionMode Öneri"
-                                        teamMode = suggestionMode
-                                        selectedTeamChampions = suggestion.map { it.name }.toSet()
-                                    }) {
-                                        Text("Takım Kurucuya Aktar")
-                                    }
-                                } else {
-                                    Text("Henüz öneri yok. Önce Şampiyonlar sekmesinden sahip olduklarını işaretle.")
-                                }
-
-                                HorizontalDivider(Modifier.padding(vertical = 12.dp))
-                                Text("MANUEL TAKIM KURUCU", style = MaterialTheme.typography.titleLarge)
-                                OutlinedTextField(
-                                    value = teamName,
-                                    onValueChange = { teamName = it },
-                                    label = { Text("Takım adı") },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                Text("Takım alanı: $teamMode")
-                                Text("Seçim: ${selectedTeamChampions.size}/5")
-                                champions.forEach { champion ->
-                                    Row(
-                                        Modifier.fillMaxWidth().clickable {
-                                            val updated = selectedTeamChampions.toMutableSet()
-                                            if (champion.name in updated) updated.remove(champion.name)
-                                            else if (updated.size < 5) updated.add(champion.name)
-                                            selectedTeamChampions = updated
-                                        }.padding(vertical = 3.dp)
-                                    ) {
-                                        Checkbox(
-                                            checked = champion.name in selectedTeamChampions,
-                                            onCheckedChange = { checked ->
-                                                val updated = selectedTeamChampions.toMutableSet()
-                                                if (checked && updated.size < 5) updated.add(champion.name)
-                                                else if (!checked) updated.remove(champion.name)
-                                                selectedTeamChampions = updated
-                                            }
-                                        )
-                                        Column {
-                                            Text(champion.name)
-                                            Text("${champion.rarity} • ${champion.role}", style = MaterialTheme.typography.bodySmall)
-                                        }
-                                    }
-                                }
-                                Button(onClick = {
-                                    if (teamName.isBlank()) message = "Önce takıma isim ver."
-                                    else if (selectedTeamChampions.size != 5) message = "Tam 5 şampiyon seç."
-                                    else {
-                                        val team = SavedTeam(teamName.trim(), teamMode, selectedTeamChampions.toList())
-                                        savedTeams = savedTeams.filterNot { it.name == team.name } + team
-                                        saveTeams()
-                                        message = "Takım kaydedildi."
-                                        teamName = ""
-                                        selectedTeamChampions = emptySet()
-                                    }
-                                }, modifier = Modifier.fillMaxWidth()) {
-                                    Text("Takımı Kaydet")
-                                }
-                                HorizontalDivider(Modifier.padding(vertical = 12.dp))
-                                Text("KAYITLI TAKIMLAR", style = MaterialTheme.typography.titleMedium)
-                                savedTeams.forEach { team ->
-                                    Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                                        Column(Modifier.padding(12.dp)) {
-                                            Text(team.name, style = MaterialTheme.typography.titleMedium)
-                                            Text("Alan: ${team.mode}")
-                                            team.champions.forEachIndexed { index, name ->
-                                                Text("${index + 1}. $name")
-                                            }
-                                            Row {
-                                                TextButton(onClick = {
-                                                    teamName = team.name
-                                                    teamMode = team.mode
-                                                    selectedTeamChampions = team.champions.toSet()
-                                                }) { Text("Düzenle") }
-                                                TextButton(onClick = {
-                                                    savedTeams = savedTeams.filterNot { it.name == team.name }
-                                                    saveTeams()
-                                                    message = "Takım silindi."
-                                                }) { Text("Sil") }
-                                            }
-                                        }
-                                    }
+                                    Text(champ.name)
                                 }
                             }
+                        }
 
-                            5 -> Column(Modifier.verticalScroll(rememberScrollState())) {
-                                Text("ZİNDAN VE FARM TAKİBİ", style = MaterialTheme.typography.titleLarge)
-                                listOf("Ejderha", "Ateş Şövalyesi", "Örümcek", "Buz Golemi", "Minotor", "Golem Kulesi")
-                                    .forEach { name ->
-                                        FilterChip(
-                                            selected = dungeon == name,
-                                            onClick = { dungeon = name; saveText("dungeon_name", name) },
-                                            label = { Text(name) },
-                                            modifier = Modifier.padding(end = 4.dp)
-                                        )
-                                    }
-                                OutlinedTextField(
-                                    value = dungeonStage,
-                                    onValueChange = { dungeonStage = it; saveText("dungeon_stage", it) },
-                                    label = { Text("Ulaştığın aşama") },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                OutlinedTextField(
-                                    value = farmGoal,
-                                    onValueChange = { farmGoal = it; saveText("farm_goal", it) },
-                                    label = { Text("Farm hedefin") },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                OutlinedTextField(
-                                    value = farmNotes,
-                                    onValueChange = { farmNotes = it; saveText("farm_notes", it) },
-                                    label = { Text("Farm notları") },
-                                    modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp)
-                                )
-                                Text("Seçili zindan: $dungeon")
-                                Text("Aşama: $dungeonStage")
-                            }
+                        Button(
+                            onClick = {
+                                if (teamSelection.isNotEmpty()) {
+                                    savedTeams = savedTeams + teamSelection.joinToString(", ")
+                                    saveTeams()
+                                    teamSelection = emptyList()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Seçili takımı kaydet") }
 
-                            6 -> Column(Modifier.verticalScroll(rememberScrollState())) {
-                                Text("YEDEKLEME VE GERİ YÜKLEME", style = MaterialTheme.typography.titleLarge)
-                                Text("Şampiyonlarını, kaynaklarını, Mercy sayaçlarını ve takımlarını JSON dosyasına kaydet.")
-                                Button(
-                                    onClick = { exportLauncher.launch("raid_sans_avcisi_yedek.json") },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) { Text("Yedek Dosyası Oluştur") }
-                                Button(
-                                    onClick = { importLauncher.launch(arrayOf("application/json", "text/*")) },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) { Text("Yedekten Geri Yükle") }
-                                Text("Dikkat: Geri yükleme mevcut kayıtların üzerine yazabilir. Önce güncel yedeğini al.")
-                                if (message.isNotBlank()) Text(message)
+                        Text("Kayıtlı takımlar")
+                        savedTeams.forEachIndexed { index, team ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("${index + 1}. $team", Modifier.weight(1f))
+                                TextButton(onClick = {
+                                    savedTeams = savedTeams.filterIndexed { i, _ -> i != index }
+                                    saveTeams()
+                                }) { Text("Sil") }
                             }
                         }
                     }
-                }
 
-                selectedChampion?.let { champion ->
-                    AlertDialog(
-                        onDismissRequest = { selectedChampion = null },
-                        title = { Text(champion.name) },
-                        text = {
-                            Column(
-                                Modifier.fillMaxWidth().heightIn(max = 480.dp)
-                                    .verticalScroll(rememberScrollState())
-                            ) {
-                                Text("${champion.rarity} • ${champion.faction}")
-                                Text("Rol: ${champion.role}")
-                                Text("Kullanım: ${champion.uses}")
-                                OutlinedTextField(
-                                    value = level,
-                                    onValueChange = { level = it },
-                                    label = { Text("Seviye (1-60)") },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                                )
-                                OutlinedTextField(
-                                    value = stars,
-                                    onValueChange = { stars = it },
-                                    label = { Text("Yıldız (1-6)") },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                                )
-                                OutlinedTextField(
-                                    value = ascension,
-                                    onValueChange = { ascension = it },
-                                    label = { Text("Terfi (0-6)") },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                                )
-                                OutlinedTextField(
-                                    value = skills,
-                                    onValueChange = { skills = it },
-                                    label = { Text("Beceri notları") },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                OutlinedTextField(
-                                    value = equipment,
-                                    onValueChange = { equipment = it },
-                                    label = { Text("Ekipman ve aksesuar notları") },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                        },
-                        confirmButton = {
-                            Button(onClick = {
-                                prefs.edit()
-                                    .putString("${champion.name}_level", level)
-                                    .putString("${champion.name}_stars", stars)
-                                    .putString("${champion.name}_ascension", ascension)
-                                    .putString("${champion.name}_skills", skills)
-                                    .putString("${champion.name}_equipment", equipment)
-                                    .apply()
-                                selectedChampion = null
-                            }) { Text("Kaydet") }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { selectedChampion = null }) { Text("Kapat") }
-                        }
-                    )
+                    "Zindan" -> {
+                        Text("Zindan ve farm takibi", style = MaterialTheme.typography.titleLarge)
+                        OutlinedTextField(
+                            value = dungeonName,
+                            onValueChange = {
+                                dungeonName = it
+                                prefs.edit().putString("dungeon_name", it).apply()
+                            },
+                            label = { Text("Zindan adı") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = dungeonStage,
+                            onValueChange = {
+                                dungeonStage = it
+                                prefs.edit().putInt("dungeon_stage", it.toIntOrNull() ?: 0).apply()
+                            },
+                            label = { Text("Ulaştığın aşama") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = farmGoal,
+                            onValueChange = {
+                                farmGoal = it
+                                prefs.edit().putString("farm_goal", it).apply()
+                            },
+                            label = { Text("Farm hedefin") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = farmNotes,
+                            onValueChange = {
+                                farmNotes = it
+                                prefs.edit().putString("farm_notes", it).apply()
+                            },
+                            label = { Text("Farm notları") },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 4
+                        )
+                    }
+
+                    "Yedek" -> {
+                        Text("Veri yedekleme", style = MaterialTheme.typography.titleLarge)
+                        Text("Kaynaklarını, Mercy sayaçlarını, koleksiyonunu, takımlarını ve farm notlarını JSON dosyasına kaydedebilirsin.")
+                        Spacer(Modifier.height(16.dp))
+                        Button(
+                            onClick = { backupLauncher.launch("raid-sans-avcisi-yedek.json") },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Yedek oluştur") }
+                        Button(
+                            onClick = { restoreLauncher.launch(arrayOf("application/json", "text/*")) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Yedekten geri yükle") }
+                    }
                 }
             }
         }
-    }
-}
 
-fun loadTeams(json: String): List<SavedTeam> {
-    return try {
-        val array = JSONArray(json)
-        val result = mutableListOf<SavedTeam>()
-        for (i in 0 until array.length()) {
-            val item = array.getJSONObject(i)
-            val names = item.getJSONArray("champions")
-            val champs = mutableListOf<String>()
-            for (j in 0 until names.length()) champs.add(names.getString(j))
-            result.add(SavedTeam(item.getString("name"), item.getString("mode"), champs))
-        }
-        result
-    } catch (e: Exception) {
-        emptyList()
-    }
-}
-
-fun teamsToJson(teams: List<SavedTeam>): String {
-    val array = JSONArray()
-    teams.forEach { team ->
-        val item = JSONObject()
-        item.put("name", team.name)
-        item.put("mode", team.mode)
-        item.put("champions", JSONArray(team.champions))
-        array.put(item)
-    }
-    return array.toString()
-}
-
-@Composable
-fun ResourceRow(title: String, value: Int, change: (Int) -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 5.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text("$title: $value")
-        Row {
-            TextButton(onClick = { if (value > 0) change(value - 1) }) { Text("-") }
-            TextButton(onClick = { change(value + 1) }) { Text("+") }
+        selectedChampion?.let { champ ->
+            ChampionDetailDialog(
+                champion = champ,
+                prefs = prefs,
+                onClose = { selectedChampion = null }
+            )
         }
     }
 }
 
 @Composable
-fun MercyRow(title: String, value: Int, change: (Int) -> Unit) {
+fun SummaryCard(title: String, value: Int) {
     Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Row(
-            Modifier.fillMaxWidth().padding(10.dp),
+            Modifier.fillMaxWidth().padding(14.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                Text("Mercy sayacı: $value")
-            }
-            Row {
-                TextButton(onClick = { if (value > 0) change(value - 1) }) { Text("-1") }
-                TextButton(onClick = { change(value + 1) }) { Text("+1") }
-                TextButton(onClick = { change(0) }) { Text("Sıfırla") }
+            Text(title)
+            Text(value.toString(), fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+fun NumberEditor(title: String, value: Int, onChange: (Int) -> Unit) {
+    var text by remember(value) { mutableStateOf(value.toString()) }
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(title, Modifier.weight(1f))
+        OutlinedTextField(
+            value = text,
+            onValueChange = {
+                text = it.filter { char -> char.isDigit() }
+                onChange(text.toIntOrNull() ?: 0)
+            },
+            modifier = Modifier.width(110.dp),
+            singleLine = true
+        )
+    }
+}
+
+@Composable
+fun FilterMenu(
+    label: String,
+    selected: String,
+    options: List<String>,
+    onSelected: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        OutlinedButton(onClick = { expanded = true }) {
+            Text("$label: $selected")
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach {
+                DropdownMenuItem(
+                    text = { Text(it) },
+                    onClick = {
+                        onSelected(it)
+                        expanded = false
+                    }
+                )
             }
         }
     }
+}
+
+@Composable
+fun ChampionRow(
+    champion: Champion,
+    isOwned: Boolean,
+    onClick: () -> Unit,
+    onToggle: () -> Unit
+) {
+    Card(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onClick() }
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ChampionAvatar(champion.avatarUrl)
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(champion.name, fontWeight = FontWeight.Bold)
+                Text("${champion.rarity} • ${champion.affinity} • ${champion.role}")
+                Text(champion.faction, style = MaterialTheme.typography.bodySmall)
+            }
+            Checkbox(checked = isOwned, onCheckedChange = { onToggle() })
+        }
+    }
+}
+
+@Composable
+fun ChampionAvatar(url: String) {
+    var bitmap by remember(url) { mutableStateOf<android.graphics.Bitmap?>(null) }
+
+    LaunchedEffect(url) {
+        if (url.isNotBlank()) {
+            bitmap = withContext(Dispatchers.IO) {
+                try {
+                    val connection = URL(url).openConnection() as HttpURLConnection
+                    connection.connectTimeout = 8000
+                    connection.readTimeout = 8000
+                    val image = connection.inputStream.use { BitmapFactory.decodeStream(it) }
+                    connection.disconnect()
+                    image
+                } catch (_: Exception) {
+                    null
+                }
+            }
+        }
+    }
+
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap!!.asImageBitmap(),
+            contentDescription = "Şampiyon portresi",
+            modifier = Modifier.size(58.dp)
+        )
+    } else {
+        Surface(
+            modifier = Modifier.size(58.dp),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text("RAID")
+            }
+        }
+    }
+}
+
+@Composable
+fun ChampionDetailDialog(
+    champion: Champion,
+    prefs: android.content.SharedPreferences,
+    onClose: () -> Unit
+) {
+    var level by remember(champion.name) {
+        mutableStateOf(prefs.getInt("${champion.name}_level", 60).toString())
+    }
+    var stars by remember(champion.name) {
+        mutableStateOf(prefs.getInt("${champion.name}_stars", 6).toString())
+    }
+    var ascension by remember(champion.name) {
+        mutableStateOf(prefs.getInt("${champion.name}_ascension", 6).toString())
+    }
+    var skills by remember(champion.name) {
+        mutableStateOf(prefs.getString("${champion.name}_skills", "") ?: "")
+    }
+    var equipment by remember(champion.name) {
+        mutableStateOf(prefs.getString("${champion.name}_equipment", "") ?: "")
+    }
+
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text(champion.name) },
+        text = {
+            Column {
+                ChampionAvatar(champion.avatarUrl)
+                Text("${champion.rarity} • ${champion.affinity}")
+                Text("Hizip: ${champion.faction}")
+                Text("Rol: ${champion.role}")
+                OutlinedTextField(level, { level = it }, label = { Text("Seviye") })
+                OutlinedTextField(stars, { stars = it }, label = { Text("Yıldız") })
+                OutlinedTextField(ascension, { ascension = it }, label = { Text("Yükseltme") })
+                OutlinedTextField(
+                    skills, { skills = it },
+                    label = { Text("Yetenek notları") },
+                    minLines = 2
+                )
+                OutlinedTextField(
+                    equipment, { equipment = it },
+                    label = { Text("Ekipman notları") },
+                    minLines = 2
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                prefs.edit()
+                    .putInt("${champion.name}_level", level.toIntOrNull() ?: 0)
+                    .putInt("${champion.name}_stars", stars.toIntOrNull() ?: 0)
+                    .putInt("${champion.name}_ascension", ascension.toIntOrNull() ?: 0)
+                    .putString("${champion.name}_skills", skills)
+                    .putString("${champion.name}_equipment", equipment)
+                    .apply()
+                onClose()
+            }) { Text("Kaydet") }
+        },
+        dismissButton = {
+            TextButton(onClick = onClose) { Text("Kapat") }
+        }
+    )
 }
