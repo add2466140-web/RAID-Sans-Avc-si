@@ -1,6 +1,7 @@
 package com.raidsansavcisi
 
 import android.os.Bundle
+import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -12,7 +13,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.KeyboardType
-import android.content.Context
 
 data class Champion(val name: String, val rarity: String, val faction: String)
 
@@ -31,15 +31,26 @@ class MainActivity : ComponentActivity() {
                 var sacred by remember { mutableIntStateOf(prefs.getInt("sacred", 0)) }
                 var primal by remember { mutableIntStateOf(prefs.getInt("primal", 0)) }
                 var mercy by remember { mutableIntStateOf(prefs.getInt("mercy", 0)) }
+
                 var probability by remember { mutableStateOf("1") }
+                var filter by remember { mutableStateOf("Tümü") }
+                var search by remember { mutableStateOf("") }
+                var ownedOnly by remember { mutableStateOf(false) }
+
+                var owned by remember {
+                    mutableStateOf(
+                        prefs.getStringSet("owned_champions", emptySet())
+                            ?.toSet() ?: emptySet()
+                    )
+                }
 
                 fun save(key: String, value: Int) {
                     prefs.edit().putInt(key, value).apply()
                 }
 
                 val champions = listOf(
-                    Champion("Bad-el-Kazar", "Efsanevi", "Ölümsüzler"),
-                    Champion("Arbiter", "Efsanevi", "Yüce Elfler"),
+                    Champion("Bad-el-Kazar", "Efsanevi", "Undead Hordes"),
+                    Champion("Arbiter", "Efsanevi", "High Elves"),
                     Champion("Ninja", "Efsanevi", "Shadowkin"),
                     Champion("Searsha", "Efsanevi", "Bilinmiyor"),
                     Champion("Rotos", "Efsanevi", "Undead Hordes"),
@@ -57,9 +68,6 @@ class MainActivity : ComponentActivity() {
                     Champion("Frolni", "Mitik", "Dwarves")
                 )
 
-                var filter by remember { mutableStateOf("Tümü") }
-                var search by remember { mutableStateOf("") }
-
                 Scaffold(
                     topBar = {
                         Column {
@@ -68,6 +76,7 @@ class MainActivity : ComponentActivity() {
                                 style = MaterialTheme.typography.headlineSmall,
                                 modifier = Modifier.padding(16.dp)
                             )
+
                             TabRow(selectedTabIndex = tab) {
                                 listOf("Özet", "Mercy", "Kaynaklar", "Şampiyonlar")
                                     .forEachIndexed { index, title ->
@@ -81,6 +90,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 ) { padding ->
+
                     Column(
                         modifier = Modifier
                             .padding(padding)
@@ -88,6 +98,7 @@ class MainActivity : ComponentActivity() {
                             .padding(16.dp)
                     ) {
                         when (tab) {
+
                             0 -> {
                                 Text("Hoş geldin!")
                                 Spacer(Modifier.height(12.dp))
@@ -97,25 +108,38 @@ class MainActivity : ComponentActivity() {
                                 Text("İlkel: $primal")
                                 Spacer(Modifier.height(12.dp))
                                 Text("Mercy sayacı: $mercy")
-                                Text("Şampiyon koleksiyonunu ve kaynaklarını takip et.")
+                                Text("Sahip olduğun şampiyon: ${owned.size}")
                             }
 
                             1 -> {
-                                Text("MERCY TAKİBİ", style = MaterialTheme.typography.titleLarge)
+                                Text(
+                                    "MERCY TAKİBİ",
+                                    style = MaterialTheme.typography.titleLarge
+                                )
+
                                 Spacer(Modifier.height(12.dp))
                                 Text("Mercy sayacı: $mercy")
+
                                 Row {
                                     Button(onClick = {
                                         mercy++
                                         save("mercy", mercy)
-                                    }) { Text("+1") }
+                                    }) {
+                                        Text("+1")
+                                    }
+
                                     Spacer(Modifier.width(8.dp))
+
                                     Button(onClick = {
                                         mercy = 0
                                         save("mercy", mercy)
-                                    }) { Text("Sıfırla") }
+                                    }) {
+                                        Text("Sıfırla")
+                                    }
                                 }
+
                                 Spacer(Modifier.height(16.dp))
+
                                 OutlinedTextField(
                                     value = probability,
                                     onValueChange = { probability = it },
@@ -124,14 +148,19 @@ class MainActivity : ComponentActivity() {
                                         keyboardType = KeyboardType.Decimal
                                     )
                                 )
+
                                 val chance = probability.toDoubleOrNull() ?: 0.0
-                                val estimate = 100.0 - (100.0 - chance).coerceIn(0.0, 100.0)
-                                Text("Girilen temel ihtimal: %${"%.2f".format(chance)}")
-                                Text("Not: Bu sayaç tahmini takip içindir; gerçek oyun ihtimalini değiştirmez.")
+
+                                Text("Girilen temel ihtimal: %$chance")
+                                Text("Bu değer yalnızca tahmini takip içindir.")
                             }
 
                             2 -> {
-                                Text("KAYNAKLAR", style = MaterialTheme.typography.titleLarge)
+                                Text(
+                                    "KAYNAKLAR",
+                                    style = MaterialTheme.typography.titleLarge
+                                )
+
                                 Spacer(Modifier.height(12.dp))
 
                                 @Composable
@@ -145,13 +174,19 @@ class MainActivity : ComponentActivity() {
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         Text("$title: $value")
+
                                         Row {
                                             TextButton(onClick = {
                                                 if (value > 0) change(value - 1)
-                                            }) { Text("-") }
+                                            }) {
+                                                Text("-")
+                                            }
+
                                             TextButton(onClick = {
                                                 change(value + 1)
-                                            }) { Text("+") }
+                                            }) {
+                                                Text("+")
+                                            }
                                         }
                                     }
                                 }
@@ -160,14 +195,17 @@ class MainActivity : ComponentActivity() {
                                     ancient = it
                                     save("ancient", it)
                                 }
+
                                 ResourceRow("Hiçlik", voidShard) {
                                     voidShard = it
                                     save("void", it)
                                 }
+
                                 ResourceRow("Kutsal", sacred) {
                                     sacred = it
                                     save("sacred", it)
                                 }
+
                                 ResourceRow("İlkel", primal) {
                                     primal = it
                                     save("primal", it)
@@ -175,15 +213,24 @@ class MainActivity : ComponentActivity() {
                             }
 
                             3 -> {
-                                Text("ŞAMPİYONLAR", style = MaterialTheme.typography.titleLarge)
+                                Text(
+                                    "ŞAMPİYON KOLEKSİYONUM",
+                                    style = MaterialTheme.typography.titleLarge
+                                )
+
+                                Text("Sahip olduğun: ${owned.size}")
+
                                 Spacer(Modifier.height(8.dp))
+
                                 OutlinedTextField(
                                     value = search,
                                     onValueChange = { search = it },
                                     label = { Text("Şampiyon ara") },
                                     modifier = Modifier.fillMaxWidth()
                                 )
+
                                 Spacer(Modifier.height(8.dp))
+
                                 Row {
                                     listOf("Tümü", "Efsanevi", "Mitik").forEach {
                                         FilterChip(
@@ -194,23 +241,68 @@ class MainActivity : ComponentActivity() {
                                         )
                                     }
                                 }
+
+                                FilterChip(
+                                    selected = ownedOnly,
+                                    onClick = { ownedOnly = !ownedOnly },
+                                    label = { Text("Sadece sahip olduklarım") }
+                                )
+
                                 val shown = champions.filter {
                                     (filter == "Tümü" || it.rarity == filter) &&
-                                    it.name.contains(search, ignoreCase = true)
+                                    it.name.contains(search, ignoreCase = true) &&
+                                    (!ownedOnly || owned.contains(it.name))
                                 }
+
                                 LazyColumn {
                                     items(shown) { champion ->
+
                                         Card(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .padding(vertical = 4.dp)
                                         ) {
-                                            Column(Modifier.padding(12.dp)) {
+                                            Column(
+                                                modifier = Modifier.padding(12.dp)
+                                            ) {
                                                 Text(
                                                     champion.name,
                                                     style = MaterialTheme.typography.titleMedium
                                                 )
-                                                Text("${champion.rarity} • ${champion.faction}")
+
+                                                Text(
+                                                    "${champion.rarity} • ${champion.faction}"
+                                                )
+
+                                                Spacer(Modifier.height(8.dp))
+
+                                                Button(
+                                                    onClick = {
+                                                        val updated = owned.toMutableSet()
+
+                                                        if (updated.contains(champion.name)) {
+                                                            updated.remove(champion.name)
+                                                        } else {
+                                                            updated.add(champion.name)
+                                                        }
+
+                                                        owned = updated.toSet()
+
+                                                        prefs.edit()
+                                                            .putStringSet(
+                                                                "owned_champions",
+                                                                owned
+                                                            )
+                                                            .apply()
+                                                    }
+                                                ) {
+                                                    Text(
+                                                        if (owned.contains(champion.name))
+                                                            "✓ Sahibim"
+                                                        else
+                                                            "+ Sahibim"
+                                                    )
+                                                }
                                             }
                                         }
                                     }
