@@ -21,7 +21,7 @@ jobs:
             -v "$PWD/godot:/project" \
             barichello/godot-ci:4.4.1 \
             godot --headless --path /project \
-            --export-debug "Android" /project/GG.apk
+            --verbose --export-debug "Android" /project/GG.apk
 
       - name: Upload GG APK
         uses: actions/upload-artifact@v4
