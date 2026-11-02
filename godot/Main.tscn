@@ -1,5 +1,5 @@
-[gd_scene load_steps=8 format=3]
-
+[gd_scene load_steps=9 format=3]
+[ext_resource type="PackedScene" path="res://Dragon.tscn" id="1_dragon"]
 [sub_resource type="PlaneMesh" id="Floor"]
 size = Vector2(24, 24)
 
