@@ -1,4 +1,4 @@
-name: GG Godot Check
+name: GG Android APK
 
 on:
   workflow_dispatch:
@@ -8,15 +8,23 @@ on:
       - '.github/workflows/build-gg.yml'
 
 jobs:
-  check:
+  build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Check Godot project
+      - name: Build GG Android APK
         run: |
           docker run --rm \
             -v "$PWD/godot:/project" \
             barichello/godot-ci:4.4.1 \
-            godot --headless --editor --path /project --quit
+            godot --headless --path /project \
+            --export-debug "Android" /project/GG.apk
+
+      - name: Upload GG APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: GG-Android-APK
+          path: godot/GG.apk
