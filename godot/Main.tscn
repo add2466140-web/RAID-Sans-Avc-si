@@ -1,5 +1,6 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=10 format=3]
 [ext_resource type="PackedScene" path="res://Dragon.tscn" id="1_dragon"]
+[ext_resource type="Script" path="res://Battle.gd" id="2_battle"]
 [sub_resource type="PlaneMesh" id="Floor"]
 size = Vector2(24, 24)
 
@@ -25,13 +26,15 @@ albedo_color = Color(0.45, 0.20, 0.75, 1)
 albedo_color = Color(0.15, 0.55, 0.30, 1)
 
 [node name="GG_Battle" type="Node3D"]
-
+script = ExtResource("2_battle")
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 rotation_degrees = Vector3(-45, -30, 0)
 light_energy = 1.5
 shadow_enabled = true
 
-[node name="Camera3D" type="Camera3D" parent="."]
+[node name="Camera3D" type="Camera3D"
+
+parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.866, 0.5, 0, -0.5, 0.866, 0, 9, 14)
 current = true
 fov = 55.0
