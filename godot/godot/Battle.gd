@@ -3,6 +3,7 @@ extends Node3D
 var enemy_hp: int = 500
 var turn: int = 1
 var hp_label: Label
+
 var heroes = [
 	{"name": "Ardan", "damage": 45},
 	{"name": "Bruna", "damage": 40},
@@ -22,19 +23,21 @@ func hero_attack(hero_index: int):
 
 	var hero = heroes[hero_index]
 	enemy_hp -= hero["damage"]
-hp_label.text = "Ejderha Canı: " + str(max(enemy_hp, 0))
+	hp_label.text = "Ejderha Canı: " + str(max(enemy_hp, 0))
+
 	print(hero["name"], " saldırdı!")
 	print("Ejderha kalan canı: ", max(enemy_hp, 0))
 
 	if enemy_hp <= 0:
 		print("EJDERHA YENİLDİ!")
-hp_label.text = "ZAFER! EJDERHA YENİLDİ!"
+		hp_label.text = "ZAFER! EJDERHA YENİLDİ!"
 	else:
 		enemy_turn()
 
 func enemy_turn():
 	turn += 1
 	print("Ejderha karşı saldırı yaptı! Tur: ", turn)
+
 func create_battle_ui():
 	var layer = CanvasLayer.new()
 	add_child(layer)
