@@ -28,6 +28,7 @@ hp_label.text = "Ejderha Canı: " + str(max(enemy_hp, 0))
 
 	if enemy_hp <= 0:
 		print("EJDERHA YENİLDİ!")
+hp_label.text = "ZAFER! EJDERHA YENİLDİ!"
 	else:
 		enemy_turn()
 
