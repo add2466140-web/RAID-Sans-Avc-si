@@ -64,3 +64,6 @@ material_override = SubResource("ArcherMat")
 position = Vector3(2, 0.9, -2)
 mesh = SubResource("HeroMesh")
 material_override = SubResource("MageMat")
+[node name="Dragon" parent="." instance=ExtResource("1_dragon")]
+position = Vector3(0, 0, -6)
+scale = Vector3(1.5, 1.5, 1.5)
