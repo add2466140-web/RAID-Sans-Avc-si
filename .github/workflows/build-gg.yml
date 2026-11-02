@@ -1,0 +1,22 @@
+name: GG Godot Check
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'godot/**'
+      - '.github/workflows/build-gg.yml'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check Godot project
+        run: |
+          docker run --rm \
+            -v "$PWD/godot:/project" \
+            barichello/godot-ci:4.4.1 \
+            godot --headless --editor --path /project --quit
